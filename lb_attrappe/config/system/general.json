@@ -1,0 +1,6 @@
+{"Base":{"Version":"4.0.0","Systemloglevel":"7","Sendstatistic":"0"},
+ "Network":{"Interface":"eth0","Friendlyname":"LoxBerry Pruefstand","Ipaddress":"192.168.1.50","Mask":"255.255.255.0","Gateway":"192.168.1.1","Dns":"192.168.1.1"},
+ "Timeserver":{"Method":"ntp","Ntpserver":"pool.ntp.org"},
+ "Miniserver":{"1":{"Name":"Miniserver","Ipaddress":"192.168.1.10","Port":"80","Admin":"admin","Pass":"geheim123","Credentials":"admin:geheim123","Porthttps":"443","Preferhttps":"0","Usecloudns":"0"}},
+ "Webserver":{"Port":"80"},
+ "Ssdp":{"Enabled":"1"}}

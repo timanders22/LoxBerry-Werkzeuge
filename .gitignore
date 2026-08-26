@@ -1,0 +1,22 @@
+# Die eigenen Woerter der Anonymisierungsprobe - eine Liste mit Namen gehoert
+# nicht in eine Veroeffentlichung. Vorlage: anonymisierung_woerter.beispiel.txt
+anonymisierung_woerter.txt
+
+# Prüfstände mit ECHTEN Anlagendaten. lb/ und lb_mqtt/ tragen die
+# Konfiguration einer laufenden Installation: Aktionstoken, WLAN-Kennwoerter,
+# Broker-Zugaenge, Fahrzeugnummern. Sie gehoeren nirgendwohin ausser auf den
+# eigenen Rechner.
+lb/
+lb_mqtt/
+
+# Erzeugtes
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.tmp
+*.zip
+.DS_Store
+Thumbs.db
+*~
+*.swp

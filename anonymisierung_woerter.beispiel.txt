@@ -1,0 +1,11 @@
+# Beispiel. Kopieren nach anonymisierung_woerter.txt und anpassen.
+#
+# Hier stehen die Woerter, die in einer Veroeffentlichung nichts zu suchen
+# haben: Nachname, Vorname, Hausname, der Name des Arbeitsordners. Eine
+# Zeile je Wort, # leitet einen Kommentar ein.
+#
+# Warum nicht im Quelltext: ein Werkzeug, das den Namen im Quelltext fuehrt,
+# traegt genau den Namen in jede Veroeffentlichung, vor dem es schuetzen soll.
+Mustermann
+Erika
+Musterhaus

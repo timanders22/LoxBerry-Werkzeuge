@@ -18,6 +18,30 @@ Zusaetzlich, wenn eine Grundlinie angegeben ist: jede Datei muss den
 Zeilenendstil behalten, den sie in der zuletzt VEROEFFENTLICHTEN Fassung
 hatte.
 
+UND DIE DATEIRECHTE, seit dem 28.08.2026
+----------------------------------------
+Bis dahin entstand jeder Eintrag als blankes zipfile.ZipInfo. CPythons
+writestr() stempelt darauf 0o600 - auf Dateien UND auf Verzeichnisse.
+Ein Verzeichnis ohne x-Bit laesst sich nicht betreten; unzip legt es als
+drw------- an. Und plugininstall.pl kopiert NICHT als root, sondern mit
+"sudo -n -u loxberry cp -r -v" (Zeilen 939, 958, 1002, 1062, 1080, 1097).
+
+Die Wirkung stand am 28.08.2026 im Installationsprotokoll einer Anlage:
+jede Datei in einem Unterverzeichnis scheiterte mit
+"cp: cannot stat ...: Permission denied", die oberste Ebene ging durch,
+und am Ende meldete der Installer trotzdem "ALLES ERLEDIGT". Das Plugin
+war danach nicht mehr auf dem Geraet - die alte Installation hatte der
+Installer da schon entfernt.
+
+Betroffen waren ALLE 25 Archive im Arbeitsordner. Die Archive der
+GitHub-Tags nicht: sie tragen DOS-Attribute, und dann nimmt unzip die
+umask.
+
+Geeicht in beide Richtungen (drei Bauformen, entpackt unter Linux):
+    blankes ZipInfo   drw-------   cp: Permission denied
+    mit Rechten       drwxr-xr-x   cp: geht
+    Zeichenkette      drwxrwxr-x   cp: geht
+
 Aufruf:
     python3 packen.py PLUGINORDNER [--grundlinie VEROEFFENTLICHT.zip] [--probe]
 """
@@ -28,6 +52,17 @@ import sys
 import zipfile
 
 argv = sys.argv[1:]
+
+# Ein unbekannter Schalter darf nicht ARBEITEN. Am 28.08.2026 wurde dieses
+# Werkzeug mit --pruefen aufgerufen (es heisst --probe); es hat den Schalter
+# stillschweigend uebergangen und gepackt, wo nur gemessen werden sollte.
+BEKANNT = ('--probe', '--grundlinie')
+unbekannt = [a for a in argv if a.startswith('--') and a not in BEKANNT]
+if unbekannt:
+    sys.stderr.write('ABBRUCH: unbekannte(r) Schalter %s - bekannt sind %s\n'
+                     % (', '.join(unbekannt), ', '.join(BEKANNT)))
+    sys.exit(2)
+
 PROBE = '--probe' in argv
 
 
@@ -129,6 +164,23 @@ def uebergehen(pfad):
     return teile[-1].endswith(('.pyc', '.pyo'))
 
 
+# Welche Rechte ein Eintrag im Archiv traegt. Verzeichnisse BRAUCHEN das
+# x-Bit, sonst laesst sich nicht hineinsehen. Ausfuehrbar sind genau die
+# Dateien, die auch ausgefuehrt werden - der Installer setzt sie zwar
+# ohnehin, aber dann entscheidet das Dateisystem darueber und nicht der
+# Verfasser (Lehre aus der KODI-NG-Sitzung, 26.08.2026).
+def rechte(pfad):
+    """Rueckgabe: (Unix-Modus, DOS-Merker) fuer external_attr."""
+    if pfad.endswith('/'):
+        return 0o40755, 0x10
+    teile = pfad.split('/')
+    if teile[0] in ('bin', 'cron', 'daemon', 'sudoers') \
+            or pfad == 'uninstall/uninstall' \
+            or teile[-1].endswith(('.sh', '.pl', '.cgi')):
+        return 0o100755, 0
+    return 0o100644, 0
+
+
 eintraege = []
 uebergangen = []
 for w, verz, ds in os.walk('.'):
@@ -156,9 +208,17 @@ if PROBE:
     print('  --probe: %d Eintraege waeren zu packen, nichts geschrieben' % len(eintraege))
     sys.exit(0)
 
+ausfuehrbar = []
 with zipfile.ZipFile(ZIEL, 'w', zipfile.ZIP_DEFLATED) as z:
     for eintrag, quelle in sorted(eintraege):
         zi = zipfile.ZipInfo(eintrag)
+        modus, dos = rechte(eintrag)
+        # create_system 3 = Unix. Ohne diese Angabe wertet unzip den Modus
+        # gar nicht aus; unter Windows steht hier sonst 0 (DOS).
+        zi.create_system = 3
+        zi.external_attr = (modus << 16) | dos
+        if quelle is not None and modus & 0o111:
+            ausfuehrbar.append(eintrag)
         if quelle is None:
             z.writestr(zi, b'')
         else:
@@ -175,13 +235,42 @@ auf_platte = {os.path.relpath(os.path.join(w, d), '.').replace(os.sep, '/')
 auf_platte = {p for p in auf_platte if not uebergehen(p)}
 fehlt = sorted(auf_platte - set(drin))
 tiefer = [n for n in drin if n.count('/') and n.endswith('plugin.cfg')]
+# Die Rechte werden GEMESSEN, nicht angenommen: ein Verzeichnis ohne
+# x-Bit ist der Befund vom 28.08.2026, und eine Zusage ohne Messung
+# waere genau das, wogegen dieses Werkzeug gebaut ist.
+ohne_x = [i.filename for i in z.infolist()
+          if i.is_dir() and not (((i.external_attr >> 16) & 0o7777) & 0o111)]
 z.close()
+
+
+def abbruch(text):
+    """Abbrechen UND das halbfertige Archiv wegraeumen.
+
+    Ein Archiv, das nach einem Abbruch liegen bleibt, sieht aus wie ein
+    gepacktes - und genau das laedt dann jemand hoch.
+    """
+    try:
+        os.remove(ZIEL)
+        text += '\n  Das halbfertige Archiv wurde entfernt.'
+    except OSError as e:
+        text += '\n  ACHTUNG: %s liess sich nicht entfernen (%s).' % (ZIEL, e)
+    raise SystemExit(text)
+
+
 if anders or fehlt or tiefer or 'plugin.cfg' not in drin:
-    raise SystemExit('ABBRUCH nach dem Packen: abweichend=%s fehlend=%s doppelt=%s'
-                     % (anders, fehlt, tiefer))
+    abbruch('ABBRUCH nach dem Packen: abweichend=%s fehlend=%s doppelt=%s'
+            % (anders, fehlt, tiefer))
+if ohne_x:
+    abbruch('ABBRUCH: %d Verzeichnis(se) ohne x-Bit im Archiv - auf dem '
+            'LoxBerry waere davon keine Datei kopierbar: %s'
+            % (len(ohne_x), ', '.join(ohne_x[:5])))
 
 h = hashlib.sha256(open(ZIEL, 'rb').read()).hexdigest()
 print('\n  %s' % os.path.basename(ZIEL))
 print('  %d Eintraege, %d Dateien, %d Byte' % (len(eintraege), len(drin), os.path.getsize(ZIEL)))
 print('  SHA256 %s' % h)
 print('  byteweise gegen den Ordner: gleich')
+print('  Rechte: %d Verzeichnisse 0755, %d Dateien 0755, %d Dateien 0644'
+      % (len(eintraege) - len(drin), len(ausfuehrbar), len(drin) - len(ausfuehrbar)))
+if ausfuehrbar:
+    print('    ausfuehrbar: %s' % ', '.join(sorted(ausfuehrbar)))

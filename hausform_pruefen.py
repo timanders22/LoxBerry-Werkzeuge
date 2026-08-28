@@ -82,12 +82,21 @@ for d in sorted(ordner):
     r = messe(d)
     if r is None:
         continue
-    ab = sum(1 for ist, soll in zip(r, SOLL) if ist != soll)
+    # '?' heisst NICHT VORHANDEN, nicht ABWEICHEND. Ein Plugin ohne
+    # Datenverzeichnis braucht den Schluessel nicht, und eines mit zwei
+    # Meldungen braucht keine Liste. Wer das zusammenzaehlt, macht aus einer
+    # Abwesenheit einen Mangel - dieselbe Verwechslung wie bei
+    # wachposten_pruefen ('kann nicht pruefen' ist nicht 'in Ordnung', aber
+    # eben auch nicht 'kaputt').
+    ab = sum(1 for ist, soll in zip(r, SOLL) if ist != soll and ist != '?')
+    fehlt = sum(1 for ist in r if ist == '?')
     n_ab += 1 if ab else 0
     print('%-30s %-8s %-9s %-11s %-13s %-11s %s'
           % (os.path.basename(d)[16:46], r[0], r[1], r[2], r[3], r[4],
-             ab if ab else '-'))
+             ('%d' % ab) if ab else ('- (%d nicht vorhanden)' % fehlt if fehlt else '-')))
 print('-' * 100)
 print('%d von %d Linien weichen ab. Eine Abweichung ist kein Fehler - sie '
-      'kostet bei jeder\nAenderung, die mehrere Linien betrifft.'
+      'kostet bei jeder\nAenderung, die mehrere Linien betrifft. "nicht '
+      'vorhanden" ist keine Abweichung:\nein Plugin ohne Datenverzeichnis '
+      'braucht den Schluessel nicht.'
       % (n_ab, len([1 for d in ordner if messe(d)])))

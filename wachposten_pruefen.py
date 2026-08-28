@@ -78,22 +78,36 @@ def pruefe(o):
     # Ohne b) waere ein Vergleich, den niemand ruft, ein gruener Haken.
     zeile_wache = next((i for i, y in enumerate(z) if 'hash_equals' in y), None)
     if zeile_wache is None:
-        ruf = re.compile(r'\b\w+_(?:formtoken_ok|fmt_ok|merkmal_ok)\s*\(')
-        zeile_wache = next((i for i, y in enumerate(z) if ruf.search(y)), None)
-        vergleich_da = False
-        if zeile_wache is not None:
-            for wurzel, _, ds in os.walk(o):
-                for f in ds:
-                    if not f.endswith('.php'):
-                        continue
-                    try:
-                        if 'hash_equals' in io.open(os.path.join(wurzel, f),
-                                                    encoding='utf-8',
-                                                    errors='replace').read():
-                            vergleich_da = True
-                    except Exception:
-                        pass
-        if zeile_wache is None or not vergleich_da:
+        # ZWEITE BERICHTIGUNG, 27.08.2026. Vorher stand hier eine Liste
+        # erlaubter Funktionsnamen (_formtoken_ok, _fmt_ok, _merkmal_ok).
+        # Midea2Lox nennt seinen Posten mi_wachposten(), und zwanzig weitere
+        # Linien nennen ihn wieder anders - alle fielen auf 'kein Vergleich'.
+        #
+        # Eine Namensliste kennt nur, woran jemand gedacht hat. Gesucht wird
+        # deshalb nach der SACHE: welche Funktion im Plugin enthaelt den
+        # Vergleich, und ruft index.php sie?
+        traeger = set()
+        for wurzel, _, ds in os.walk(o):
+            for f in ds:
+                if not f.endswith('.php'):
+                    continue
+                try:
+                    t = io.open(os.path.join(wurzel, f), encoding='utf-8',
+                                errors='replace').read()
+                except Exception:
+                    continue
+                if 'hash_equals' not in t:
+                    continue
+                for m in re.finditer(r'function\s+(\w+)\s*\(', t):
+                    rest = t[m.end():]
+                    naechste = re.search(r'\nfunction\s+\w+\s*\(', rest)
+                    rumpf = rest[:naechste.start()] if naechste else rest
+                    if 'hash_equals' in rumpf:
+                        traeger.add(m.group(1))
+        if traeger:
+            ruf = re.compile(r'\b(?:' + '|'.join(sorted(map(re.escape, traeger))) + r')\s*\(')
+            zeile_wache = next((i for i, y in enumerate(z) if ruf.search(y)), None)
+        if zeile_wache is None:
             return ('kein Vergleich', [])
     wache = zeile_wache
     m = re.search(r'\$(\w+_post)\s*=\s*false', ganz)
@@ -129,6 +143,16 @@ for e in ordner:
         continue
     art, offen = r
     if art == 'kein Vergleich':
+        # NICHT ueberspringen. Eine fehlende Zeile sieht in der
+        # Zusammenfassung aus wie eine gruene - und genau so ist am
+        # 27.08.2026 Skoda Connect 0.9.12 durchgerutscht: kein hash_equals,
+        # also kein Ansatzpunkt, also gar keine Zeile, also '0 Linien mit
+        # ungedeckten Zweigen'. Das las sich wie Entwarnung fuer ein Plugin
+        # ohne jeden Schutz.
+        n += 1
+        print('%-30s %-34s %s' % (os.path.basename(o)[16:45],
+                                  'KEIN VERGLEICH GEFUNDEN',
+                                  'nicht messbar - von Hand ansehen'))
         continue
     if offen:
         n += 1

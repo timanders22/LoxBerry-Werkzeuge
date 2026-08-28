@@ -199,20 +199,63 @@ EINGEBAUT = {
     'parse_ini_file', 'parse_ini_string', 'parse_url', 'parse_str',
     'array_map', 'array_filter', 'array_merge', 'str_replace', 'str_repeat',
     'file_get_contents', 'file_put_contents', 'is_array', 'in_array',
+    # mt_* wurde an Matter2Lox gemeldet: dessen Kuerzel ist 'mt', und damit
+    # galt der Zufallszahlengeber von PHP als eigene, nie definierte Funktion.
+    'mt_rand', 'mt_srand', 'mt_getrandmax',
+    # Weitere Kuerzel, die im Hause vorkommen und mit PHP kollidieren.
+    'str_pad', 'str_split', 'str_contains', 'str_starts_with', 'str_ends_with',
+    'is_string', 'is_numeric', 'is_file', 'is_dir', 'is_null', 'is_int',
+    'array_key_exists', 'array_keys', 'array_values', 'array_slice',
 }
 
 
 def funktionen(dateien):
     defs, aufrufe, alle = set(), {}, []
+    unbewacht = set()   # Namen, die MINDESTENS EINMAL ohne Wache stehen
     for f in dateien:
         roh = Path(f).read_text(encoding='utf-8', errors='replace')
+        # DEFINITIONEN UND AUFRUFE MUESSEN DENSELBEN TEXT LESEN.
+        #
+        # Bis zum 28.08.2026 wurden die Definitionen im ROHTEXT gesucht, die
+        # Aufrufe dagegen in nur_code(). Damit galt jede JavaScript-Funktion
+        # im <script>-Bereich als PHP-Funktion, die niemand aufruft: 'zeige'
+        # in den meisten Linien, 'activate' und 'mwTtsMode' in Robonect.
+        t = nur_code(roh)
         # 'function &name()' gibt eine Referenz zurueck - das & gehoert zur
         # Definition, nicht zum Namen. Ohne das optionale & galt eine solche
         # Funktion als nie definiert (gefunden am 10.08.2026 an BatterieBMS).
-        gefunden = re.findall(r'\bfunction\s*&?\s*([a-zA-Z_]\w*)\s*\(', roh)
-        defs |= set(gefunden)
-        alle += gefunden
-        t = nur_code(roh)
+        #
+        # \bfunction\b statt \bfunction: ohne die zweite Wortgrenze griff das
+        # Muster auch in function_exists( - nach "function" steht dort ein
+        # Unterstrich, und der ist ein Wortzeichen. Jedes Plugin im Hause
+        # benutzt function_exists, jedes bekam '_exists' als doppelt
+        # definierte, nie aufgerufene Funktion gemeldet - und weil "doppelt
+        # definiert" den Rueckgabewert auf 1 setzt, war dieses Werkzeug ueber
+        # den ganzen Bestand rot.
+        for m in re.finditer(r'\bfunction\b\s*&?\s*([a-zA-Z_]\w*)\s*\(', t):
+            nm = m.group(1)
+            defs.add(nm)
+            # EINE BEWACHTE DEFINITION IST KEINE DOPPELDEFINITION.
+            #
+            # if (!function_exists('x')) { function x() ... } ist das
+            # Hausmuster fuer Funktionen, die in webfrontend/html UND in
+            # webfrontend/htmlauth stehen muessen: auf dem installierten
+            # System sind das getrennte Baeume, ein require ueber die Grenze
+            # gibt es nicht. Die Wache verhindert das "cannot redeclare" im
+            # entpackten Archiv, wo beide Dateien zusammenkommen.
+            #
+            # Ohne diese Ausnahme meldete das Werkzeug Raumklima rot wegen
+            # rk_e - einer Stelle, die genau richtig gebaut ist. Zwei
+            # UNBEWACHTE Definitionen bleiben ein Befund.
+            # Gesucht wird im ROHTEXT, nicht in t: nur_code() entfernt die
+            # Zeichenketten, und damit auch den Namen im function_exists('x').
+            # Die Stellen laufen zwischen beiden Texten auseinander, deshalb
+            # wird die Wache in der ganzen Datei gesucht - wer den Namen dort
+            # ueberhaupt nennt, hat die Doppelung bedacht.
+            alle.append(nm)
+            if not re.search(r"function_exists\s*\(\s*['\"]" + re.escape(nm)
+                             + r"['\"]\s*\)", roh):
+                unbewacht.add(nm)
         for m in re.finditer(r'(?<![\$>:\w])([a-z_]\w*)\s*\(', t):
             nm = m.group(1)
             if nm in SCHLUESSELWOERTER or nm in EINGEBAUT:
@@ -221,7 +264,12 @@ def funktionen(dateien):
     # Kuerzel des Plugins aus den Definitionen ableiten
     kuerzel = {d.split('_')[0] for d in defs if '_' in d}
     eigen = {a for a in aufrufe if a.split('_')[0] in kuerzel and '_' in a}
-    doppelt = sorted({d for d in alle if alle.count(d) > 1})
+    # Doppelt ist erst ein Befund, wenn MINDESTENS EINE der Stellen ohne
+    # Wache steht. Zwei bewachte sind das Hausmuster fuer die getrennten
+    # Baeume; eine bewachte PLUS eine ungedeckte ist dagegen genau der
+    # Fall, der im entpackten Archiv "cannot redeclare" wirft - und der
+    # rutschte bis zur Eichung am 28.08.2026 durch.
+    doppelt = sorted({x for x in alle if alle.count(x) > 1 and x in unbewacht})
     return sorted(eigen - defs), doppelt, sorted(d for d in defs if d not in aufrufe), aufrufe
 
 
@@ -234,8 +282,25 @@ def main():
         wurzel = Path(args[1])
         dateien = sorted(str(f) for f in wurzel.rglob('*.php'))
     else:
-        dateien = args
+        # Ein Ordner als Argument ist der naheliegende Aufruf und war bis zum
+        # 29.08.2026 ein Absturz mit IsADirectoryError - mitten in der
+        # Pruefkette, also genau dort, wo eine Ausnahme wie ein Befund
+        # aussieht. Ein Ordner wird jetzt aufgeloest wie bei --plugin.
+        dateien = []
+        for a in args:
+            p = Path(a)
+            if p.is_dir():
+                dateien += sorted(str(f) for f in p.rglob('*.php'))
+            else:
+                dateien.append(a)
     if not dateien:
+        # Ein Plugin OHNE PHP ist kein Fehlerfall - LoxoneIcons ist eine reine
+        # Symbolsammlung. Bis zum 28.08.2026 gab das Werkzeug hier 2 zurueck
+        # und stand damit in jeder Kette rot. Ein nicht vorhandener Ordner
+        # bleibt dagegen ein Aufrufproblem.
+        if args[0] == '--plugin' and Path(args[1]).is_dir():
+            print('Keine PHP-Dateien in %s - entfaellt.' % args[1])
+            return 0
         print('Keine PHP-Dateien gefunden.')
         return 2
 

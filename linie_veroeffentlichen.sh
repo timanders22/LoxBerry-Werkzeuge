@@ -18,7 +18,14 @@ o=$(cd "$B" && ls -d LoxBerry-Plugin-"$n"-*/ 2>/dev/null | sed 's|/$||' | sort -
 [ -n "$o" ] || { echo "$n ABBRUCH: kein Ordner"; exit 1; }
 o="$B/$o"
 R="https://github.com/timanders22/LoxBerry-Plugin-$n.git"
-zweig=$(git ls-remote --symref "$R" HEAD 2>/dev/null | sed -n 's|^ref: refs/heads/\(\S*\).*|\1|p')
+# MIT Zugangsschluessel abfragen, nicht anonym. GitHub drosselt unangemeldete
+# Abfragen, und die Drosselung sieht hier aus wie ein fehlendes Repository:
+# "could not read Username" -> leere Ausgabe -> "Zweig nicht messbar".
+# Am 02.09.2026 hat das eine Veroeffentlichung angehalten, obwohl mit
+# Schluessel alles erreichbar war. Ein Abbruch, der wie ein Befund aussieht
+# und keiner ist, kostet mehr als die zwei Zeichen hier.
+RA="https://x-access-token:$PAT@github.com/timanders22/LoxBerry-Plugin-$n.git"
+zweig=$(git ls-remote --symref "$RA" HEAD 2>/dev/null | sed -n 's|^ref: refs/heads/\(\S*\).*|\1|p')
 [ -n "$zweig" ] || { echo "$n ABBRUCH: Zweig nicht messbar"; exit 1; }
 w=/tmp/v_$n; rm -rf "$w"
 git clone -q "https://x-access-token:$PAT@github.com/timanders22/LoxBerry-Plugin-$n.git" "$w" || { echo "$n ABBRUCH: clone"; exit 1; }
@@ -48,7 +55,7 @@ git push --quiet "https://x-access-token:$PAT@github.com/timanders22/LoxBerry-Pl
 git remote set-url origin "$R"
 c1=$(git rev-parse --short HEAD)
 # Schritt 3: Tag nachweisen, BEVOR die Nummer in den Zweig geht
-tsha=$(git ls-remote "$R" "refs/tags/v$soll^{}" | awk '{print $1}')
+tsha=$(git ls-remote "$RA" "refs/tags/v$soll^{}" | awk '{print $1}')
 [ -n "$tsha" ] || { echo "$n ABBRUCH: Tag v$soll nicht fern"; exit 1; }
 [ "${tsha:0:7}" = "$c1" ] || { echo "$n ABBRUCH: Tag ${tsha:0:7} != Zweig $c1"; exit 1; }
 # Schritt 4

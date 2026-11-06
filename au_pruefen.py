@@ -36,6 +36,45 @@ def _eigene_woerter():
         return [z.strip() for z in f
                 if z.strip() and not z.lstrip().startswith('#')]
 
+def php_sag():
+    """Sagt, ob php -l moeglich war - gemessen, nicht behauptet.
+
+    Die beiden Fassungen liegen auf dem Arbeitsrechner fest (Regeln/02);
+    ausserdem kann php auf dem PATH stehen. Gefunden heisst hier: die Datei
+    ist da UND antwortet auf -v.
+    """
+    import os
+    import shutil
+    import subprocess
+    kandidaten = [r"C:\tmp\php-7.4.33-Win32-vc15-x64\php.exe",
+                  r"C:\tmp\php-8.4.27-Win32-vs17-x64\php.exe"]
+    pfad = shutil.which("php")
+    if pfad:
+        kandidaten.append(pfad)
+    gefunden = []
+    for k in kandidaten:
+        if not os.path.isfile(k):
+            continue
+        try:
+            r = subprocess.run([k, "-n", "-v"], capture_output=True, text=True,
+                               timeout=20)
+        except OSError:
+            continue
+        if r.returncode == 0 and r.stdout.startswith("PHP "):
+            gefunden.append(r.stdout.splitlines()[0].split()[1])
+    if gefunden:
+        print("[INFO] php -l wurde hier NICHT gefahren - dafuer ist "
+              "freigabe_pruefen.py da.")
+        print("[INFO] Vorhanden waeren: PHP " + ", PHP ".join(sorted(set(gefunden)))
+              + ".")
+    else:
+        print("[INFO] php -l war nicht moeglich - auf diesem Rechner wurde "
+              "kein PHP gefunden.")
+        print("[INFO] Die Klammer- und Tag-Bilanz oben ist der Ersatz; sie "
+              "findet keine")
+        print("[INFO] fehlenden Semikolons und keine Fassungsunterschiede.")
+
+
 FEHLER = []
 HINWEISE = []
 
@@ -46,6 +85,94 @@ def fehl(text):
 
 def hinw(text):
     HINWEISE.append(text)
+
+
+# ---------------------------------------------------------------------------
+# Abschriften gemeinsamer Dateien (Werkzeug-V1b, 08.10.2026; wie vw_pruefen.py)
+#
+# Seit dem Sprachmodul (Nr. 36) traegt die Linie eine Abschrift von
+# Werkzeuge/gemeinsam/sprachausgabe.php und den Abschnitt [ANSAGE] aus
+# gemeinsam/sprachausgabe_texte.json. Beides benutzt die Textfunktion des
+# Moduls (ansage_t), nicht die der Linie - die Sprachpruefung meldete deshalb
+# die Modulschluessel als "nie benutzt", dazu Schluessel aus dem Selbsttest
+# des Moduls (SEITE.L_AUDIO) und die Beispieladressen des Moduls als
+# Heimnetzadressen.
+#
+# Uebergangen wird NUR, was byte-gleich mit der Stammfassung ist - wie in
+# hausstandard_pruefen.py und tote_helfer.py. Eine aeltere oder veraenderte
+# Abschrift wird normal geprueft und bleibt ein Befund (die Abweichung selbst
+# meldet gemeinsam_pruefen.py in der Kette). Vom Abschnitt [ANSAGE] werden nur
+# die Schluessel uebergangen, deren Wert in DE und EN gleich dem der
+# Stammfassung ist - und nur, wenn die Linie sprachausgabe.php unveraendert
+# traegt.
+# ---------------------------------------------------------------------------
+def _stamm():
+    return Path(__file__).resolve().parent / "gemeinsam"
+
+
+def gemeinsame_abschriften(wurzel):
+    """Dateien der Linie, die byte-gleich mit einer Stammfassung unter
+    Werkzeuge/gemeinsam/ sind (wie hausstandard_pruefen.py)."""
+    stamm = _stamm()
+    aus = set()
+    if not stamm.is_dir():
+        return aus
+    vorlagen = {}
+    for s in stamm.iterdir():
+        if s.is_file():
+            vorlagen.setdefault(s.name, []).append(s.read_bytes())
+    for f in Path(wurzel).rglob("*"):
+        if f.is_file() and f.name in vorlagen:
+            try:
+                if f.read_bytes() in vorlagen[f.name]:
+                    aus.add(f.resolve())
+            except OSError:
+                pass
+    return aus
+
+
+def ansage_modulschluessel(wurzel, gem):
+    """'ANSAGE.<schluessel>' fuer jeden Modulschluessel, dessen Wert in
+    language_de.ini UND language_en.ini gleich dem der Stammfassung ist.
+    Leer, wenn die Linie sprachausgabe.php nicht unveraendert traegt."""
+    if not any(f.name == "sprachausgabe.php" for f in gem):
+        return set()
+    quelle = _stamm() / "sprachausgabe_texte.json"
+    if not quelle.is_file():
+        return set()
+    import json
+    soll = json.loads(quelle.read_bytes().decode("utf-8"))
+    ist = {}
+    for sprache in ("de", "en"):
+        p = wurzel / ("templates/lang/language_%s.ini" % sprache)
+        if not p.is_file():
+            return set()
+        ist[sprache], _ = ini_lesen(p)
+    aus = set()
+    for k, w in soll.get("de", {}).items():
+        voll = "ANSAGE." + k
+        if (ist["de"].get(voll) == w
+                and voll in ist["en"]
+                and ist["en"][voll] == soll.get("en", {}).get(k)):
+            aus.add(voll)
+    return aus
+
+
+def _ini_ohne_schluessel(t, frei):
+    """Text einer Sprachdatei, in dem die Zeilen der Schluessel aus `frei`
+    geleert sind (Zeilenzahl bleibt)."""
+    abschnitt = ""
+    aus = []
+    for zeile in t.split("\n"):
+        s = zeile.strip()
+        if s.startswith("[") and s.endswith("]"):
+            abschnitt = s[1:-1]
+        else:
+            m = re.match(r"^([A-Z0-9_]+)\s*=", s)
+            if m and abschnitt + "." + m.group(1) in frei:
+                zeile = ""
+        aus.append(zeile)
+    return "\n".join(aus)
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +265,12 @@ def pruefe_php(wurzel):
         if "\t" in t:
             hinw("%s enthaelt Tabulatoren (in der Reiterleiste ist das gewollt)." % f.name)
     print("[OK]   %d PHP-Dateien: Klammer- und Tag-Bilanz ausgeglichen" % len(dateien))
-    print("[INFO] php -l war nicht moeglich - in diesem Arbeitsbereich gibt es kein PHP.")
+    # BERICHTIGT 05.09.2026. Hier stand dieser Satz als FESTER TEXT und
+    # wurde bedingungslos gedruckt - auch dann, wenn beide PHP-Fassungen
+    # auf dem Rechner liegen und freigabe_pruefen.py sie benutzt. Eine
+    # Zeile, die im Quelltext steht statt gemessen zu werden, ist keine
+    # Pruefung, sondern eine Absichtserklaerung. Jetzt wird nachgesehen.
+    php_sag()
 
 
 # ---------------------------------------------------------------------------
@@ -180,9 +312,27 @@ def pruefe_sprache(wurzel):
             fehl("language_%s.ini Zeile %d passt nicht auf SCHLUESSEL = \"…\": %s"
                  % (name, nr, zeile[:70]))
 
+
+    # Werkzeug-V1b: unveraenderte Abschriften gemeinsamer Dateien uebergehen.
+    gem = gemeinsame_abschriften(wurzel)
+    frei = ansage_modulschluessel(wurzel, gem)
+    for f in sorted(gem):
+        hinw("%s: unveraenderte Abschrift von Werkzeuge/gemeinsam/%s - in Sprach-, "
+             "Formular- und Anonymitaetspruefung uebergangen%s"
+             % (f.relative_to(wurzel.resolve()).as_posix(), f.name,
+                (", dazu %d Modulschluessel in [ANSAGE]" % len(frei))
+                if f.name == "sprachausgabe.php" else ""))
+    for f in sorted(wurzel.rglob("sprachausgabe.php")):
+        if f.resolve() not in gem:
+            hinw("%s weicht von Werkzeuge/gemeinsam/sprachausgabe.php ab - wird "
+                 "normal geprueft (gemeinsam_pruefen.py meldet die Abweichung)"
+                 % f.relative_to(wurzel).as_posix())
+
     benutzt = set()
     maskiert = set()
     for f in sorted(wurzel.rglob("*.php")):
+        if f.resolve() in gem:
+            continue
         t = f.read_text(encoding="utf-8")
         benutzt |= set(re.findall(r"au_t\('([A-Z0-9_]+\.[A-Z0-9_]+)'\)", t))
         # ERWEITERT 20.08.2026. Bis dahin wurden nur au_t('...') und zwei feste
@@ -203,6 +353,14 @@ def pruefe_sprache(wurzel):
         maskiert |= set(re.findall(r"au_e\(\s*au_t\('([A-Z0-9_]+\.[A-Z0-9_]+)'\)", t))
         maskiert |= set(re.findall(r"au_e\(\s*sprintf\(\s*au_t\('([A-Z0-9_]+\.[A-Z0-9_]+)'\)", t))
     benutzt |= {"EINST.DIENST_START", "EINST.DIENST_STOP", "EINST.DIENST_RESTART"}
+    # ERGAENZT 18.10.2026 (wie au_sprache_erzeugen.py seit 30.09.2026): seit
+    # 0.9.22 stehen die Beschreibungen der MQTT-Themen in bin/au_themen.json
+    # ("bez"), die Oberflaeche liest den Schluessel von dort. Ohne diesen Blick
+    # galten die 16 AU_MQTT-Texte als unbenutzt.
+    tj = wurzel / "bin/au_themen.json"
+    if tj.is_file():
+        benutzt |= set(re.findall(r'"(AU_MQTT\.[A-Z0-9_]+)"',
+                                  tj.read_text(encoding="utf-8")))
     # Die Beschriftungen werden ueber au_t('EINST.L_' . strtoupper($feld))
     # gebildet. Massgeblich sind die Feldnamen der Pruefschleifen im
     # Speichern-Handler - so bleibt die Liste hier richtig, wenn dort etwas
@@ -219,7 +377,7 @@ def pruefe_sprache(wurzel):
         fehl("Schluessel im PHP benutzt, fehlt in language_de.ini: " + k)
     for k in sorted(benutzt - set(ten)):
         fehl("Schluessel im PHP benutzt, fehlt in language_en.ini: " + k)
-    for k in sorted(set(tde) - benutzt):
+    for k in sorted(set(tde) - frei - benutzt):
         fehl("Schluessel in language_de.ini, aber im PHP nie benutzt: " + k)
     if set(tde) != set(ten):
         fehl("language_de.ini und language_en.ini sind nicht deckungsgleich.")
@@ -316,9 +474,19 @@ def pruefe_oberflaeche(wurzel):
         print("[OK]   Jede Knopfreihe steht unter einer Legende")
 
     # Formulare
+    # Werkzeug-V1b: eine unveraenderte Abschrift gemeinsamer Dateien traegt
+    # eigene <form-Zeichenketten (Kommentar und Selbsttest des Sprachmoduls,
+    # gemessen an 1.0.2 und 1.1.0: fuenf Scheinbefunde) - kein Formular
+    # dieser Oberflaeche. Eine abweichende Abschrift wird weiter geprueft.
+    gem_formular = gemeinsame_abschriften(wurzel)
     for f in sorted(wurzel.rglob("*.php")):
+        if f.resolve() in gem_formular:
+            continue
         tt = f.read_text(encoding="utf-8")
-        forms = re.findall(r"<form[^>]*>", tt)
+        # BERICHTIGT 18.10.2026 (wie vw_pruefen.py): <form\s mit Pflicht-
+        # Leerzeichen. Sonst traf das Muster den Suchtext preg_split('/<form\b/i')
+        # in au_test.php (seit 0.9.24) und meldete drei Scheinbefunde.
+        forms = re.findall(r"<form\s[^>]*>", tt)
         for form in forms:
             if 'action="index.php"' not in form:
                 fehl("%s: Formular ohne action=\"index.php\": %s" % (f.name, form[:60]))
@@ -459,10 +627,15 @@ def pruefe_vorlage(wurzel):
         fehl("Die Loxone-Vorlage benutzt nicht durchgehend CRLF.")
     if '"\\t"' not in b:
         fehl("Vor den Kindelementen der Loxone-Vorlage fehlt der Tabulator.")
-    reihenfolge = re.findall(r"\$o \.= '([A-Za-z]+)=\"", b)
-    soll = ["Title", "Comment", "Address", "PollingTime", "Title", "Comment", "Check",
-            "Signed", "Analog", "SourceValLow", "DestValLow", "SourceValHigh",
-            "DestValHigh", "DefVal", "MinVal", "MaxVal"]
+    # BERICHTIGT 18.10.2026: Sollform U7 (seit 0.9.22, Regeln/07, wie
+    # skoda_pruefen.SOLL_IN_HTTP) - HintText vorn am Wurzelelement, je Befehl
+    # Unit und HintText. Das Muster sieht dafuer auch das Wurzel-Attribut
+    # hinter '<VirtualInHttp '.
+    reihenfolge = re.findall(r"\$o \.= '(?:<VirtualInHttp )?([A-Za-z]+)=\"", b)
+    soll = ["HintText", "Title", "Comment", "Address", "PollingTime",
+            "Title", "Comment", "Check", "Signed", "Analog", "SourceValLow",
+            "DestValLow", "SourceValHigh", "DestValHigh", "DefVal", "MinVal",
+            "MaxVal", "Unit", "HintText"]
     if reihenfolge != soll:
         fehl("Attributreihenfolge der Loxone-Vorlage weicht vom Original ab:\n  %s"
              % reihenfolge)
@@ -473,7 +646,7 @@ def pruefe_vorlage(wurzel):
     # sie maskiert werden - sonst stuende 'l&auml;dt' in Loxone Config.
     if "html_entity_decode" not in t or "strip_tags" not in t:
         fehl("Die Vorlage loest vor dem Maskieren keine Entitaeten auf - in Loxone "
-             "Config stuende sonst wortwoertlich 'l&auml;dt'.")
+             "Config stuende sonst wortwoertlich 'lädt'.")
 
     # Nachbau der Ausgabe in Python und Pruefung als XML. Das ist ein Nachbau,
     # kein Durchlauf des PHP - es beweist nur, dass die erzeugte Form
@@ -587,13 +760,25 @@ def pruefe_rest(wurzel):
         print("[OK]   Nur gueltige Platzhalter, kein __pycache__, keine Sicherungsdateien")
 
     # Anonymitaet
+    #
+    # Werkzeug-V1b: die Beispieladressen einer unveraenderten Abschrift und der
+    # unveraenderten Modulschluessel in [ANSAGE] sind keine Heimnetzadressen
+    # dieser Linie. Die Namensliste (_eigene_woerter) gilt weiter fuer ALLE
+    # Dateien - ein Klarname waere auch in der Stammfassung ein Befund.
+    gem = gemeinsame_abschriften(wurzel)
+    frei = ansage_modulschluessel(wurzel, gem)
     verdacht = []
     for f in sorted(wurzel.rglob("*")):
         if not f.is_file() or f.suffix in (".png", ".ico"):
             continue
         t = f.read_text(encoding="utf-8", errors="replace")
+        t_adr = t
+        if f.resolve() in gem:
+            t_adr = ""
+        elif frei and f.suffix == ".ini" and f.parent.name == "lang":
+            t_adr = _ini_ohne_schluessel(t, frei)
         for m in re.finditer(r"\b(?:10|192\.168|172\.(?:1[6-9]|2[0-9]|3[01]))"
-                             r"(?:\.\d{1,3}){2,3}\b(?!\.)", t):
+                             r"(?:\.\d{1,3}){2,3}\b(?!\.)", t_adr):
             verdacht.append("%s: %s" % (f.name, m.group(0)))
         # Wortgrenzen, sonst schlaegt "Anwesenheitsmelder" auf den Namen der
         # Projektdatei an - genau das ist am 05.08.2026 passiert.
@@ -762,18 +947,70 @@ def pruefe_zusammenspiel(wurzel):
     block = re.search(r"foreach \(array\('zustand_text'(.*?)\) as \$k => \$b\)", lib, re.S)
     if block:
         mq |= set(re.findall(r"'([a-z_0-9]+)'\s*=>", block.group(1))) | {"zustand_text"}
-    roh = re.search(r"MQTT_FELDER = \((.*?)\n\)", py, re.S).group(1)
-    gesendet = set(re.findall(r'"([a-z_0-9]+)"', roh))
-    texte = re.search(r"MQTT_TEXTE = \((.*?)\)", py, re.S)
-    if texte:
-        gesendet |= set(re.findall(r'"([a-z_0-9]+)"', texte.group(1)))
-    fehlt = mq - gesendet
-    if fehlt:
-        fehl("Der MQTT-Reiter nennt Themen, die der Dienst nicht sendet: %s" % sorted(fehlt))
-    zuviel = gesendet - mq
-    if zuviel:
-        fehl("Der Dienst sendet Themen, die der MQTT-Reiter nicht nennt: %s" % sorted(zuviel))
-    print("[OK]   %d MQTT-Themen: Reiter und Dienst decken sich" % len(mq))
+    # V1d (08.10.2026): seit 0.9.22 steht MQTT_FELDER nicht mehr als Liste im
+    # Dienst, sondern entsteht aus der EINEN Tabelle bin/au_themen.json
+    # (M1/M7, Durchgang 29.09.2026), die auch die Oberflaeche liest
+    # (au_themen_datei()). Das alte Muster traf nichts, .group(1) warf einen
+    # AttributeError, und das Werkzeug gab seine Befundliste nie aus. Jetzt:
+    # Liste im Dienst -> wie bisher. Tabelle -> sie wird gelesen; liest auch
+    # die Oberflaeche sie, gibt es nur eine Quelle, und geprueft wird, dass die
+    # Oberflaeche kein Thema ausserhalb der Tabelle nennt und jedes
+    # Dienstthema (DIENST_THEMEN) in der Tabelle steht. Weder noch -> Befund.
+    # gesendet = None heisst: der Listenvergleich unten entfaellt (Befund schon
+    # gemeldet oder eine Quelle). Die Pruefungen danach laufen in jedem Fall.
+    m_liste = re.search(r"MQTT_FELDER = \((.*?)\n\)", py, re.S)
+    tabelle = wurzel / "bin/au_themen.json"
+    gesendet = None
+    if m_liste:
+        gesendet = set(re.findall(r'"([a-z_0-9]+)"', m_liste.group(1)))
+        texte = re.search(r"MQTT_TEXTE = \((.*?)\)", py, re.S)
+        if texte:
+            gesendet |= set(re.findall(r'"([a-z_0-9]+)"', texte.group(1)))
+    elif "au_themen.json" in py and tabelle.is_file():
+        import json
+        try:
+            tab = json.loads(tabelle.read_bytes().decode("utf-8"))
+        except ValueError as err:
+            fehl("bin/au_themen.json ist kein gueltiges JSON: %s" % err)
+            tab = {}
+        eintraege = tab.get("fahrzeug") if isinstance(tab, dict) else None
+        gesendet = set(e["thema"] for e in (eintraege if isinstance(eintraege, list) else [])
+                       if isinstance(e, dict) and isinstance(e.get("thema"), str))
+        dienst_tab = set(e["thema"] for e in (tab.get("dienst") or [])
+                         if isinstance(e, dict) and isinstance(e.get("thema"), str)) \
+            if isinstance(tab, dict) and isinstance(tab.get("dienst"), list) else set()
+        if not gesendet:
+            fehl("bin/au_themen.json nennt kein einziges Fahrzeugthema - der Dienst sendet nichts.")
+        md =re.search(r"^DIENST_THEMEN = \((.*?)\)", py, re.M | re.S)
+        dienst_py = set(re.findall(r'"([a-z_0-9/]+)"', md.group(1))) if md else set()
+        if not dienst_py:
+            fehl("DIENST_THEMEN im Dienst nicht auslesbar - das Muster trifft nicht mehr.")
+        elif dienst_py - dienst_tab:
+            fehl("Dienstthemen fehlen in bin/au_themen.json (gehen nicht hinaus): %s"
+                 % sorted(dienst_py - dienst_tab))
+        if not gesendet:
+            gesendet = None
+        elif "au_themen.json" in lib:
+            nur_lib = mq - gesendet
+            if nur_lib:
+                fehl("Die Oberflaeche nennt Themen ausserhalb von bin/au_themen.json: %s"
+                     % sorted(nur_lib))
+            elif dienst_py and not (dienst_py - dienst_tab):
+                print("[OK]   %d MQTT-Themen je Fahrzeug und %d Dienstthemen aus EINER Tabelle "
+                      "(bin/au_themen.json), Dienst und Oberflaeche lesen sie"
+                      % (len(gesendet), len(dienst_tab)))
+            gesendet = None
+    else:
+        fehl("MQTT_FELDER im Dienst nicht auslesbar - weder als Liste noch aus "
+             "bin/au_themen.json. Das Muster trifft die Schreibweise nicht mehr.")
+    if gesendet is not None:
+        fehlt = mq - gesendet
+        if fehlt:
+            fehl("Der MQTT-Reiter nennt Themen, die der Dienst nicht sendet: %s" % sorted(fehlt))
+        zuviel = gesendet - mq
+        if zuviel:
+            fehl("Der Dienst sendet Themen, die der MQTT-Reiter nicht nennt: %s" % sorted(zuviel))
+        print("[OK]   %d MQTT-Themen: Reiter und Dienst decken sich" % len(mq))
 
     # Jedes Feld der Endpunkt-Ausgabe muss in der Feldliste stehen.
     #
@@ -806,6 +1043,109 @@ def pruefe_zusammenspiel(wurzel):
              "die Herkunft der Endpunktzeilen liess sich nicht feststellen.")
 
 
+def pruefe_tabellennamen(wurzel):
+    """Jede Tabellenzeile mit Vorlage nennt einen Namen, den diese Vorlage erzeugt.
+
+    SEIT 17.10.2026 (Welle Bild 17). Der Reiter "Einbindung in Loxone" steht
+    seitdem in Tabellenzeilen Z<seite>_<nr> = "Typ | Name | Bedeutung | Eingang"
+    der Sprachdatei; die alte Liste N01..Nnn ist gestrichen. Die Pruefung
+    darunter suchte weiter nach N01..Nnn und meldete am Bau "Alle 0 virtuellen
+    Eingaenge ... gibt es auch" - gruen, ohne etwas verglichen zu haben.
+
+    Verglichen wird gegen die ERZEUGTE Vorlage, nicht gegen einen Nachbau: das
+    PHP des Plugins laeuft in einer Wegwerf-Attrappe (LBHOMEDIR in einem
+    Zeitordner, LBPPLUGINDIR = FOLDER aus plugin.cfg) und liefert die Vorlagen
+    fuer Fahrzeug 1. Jede Zeile, deren Typ "(Vorlage „X“)" nennt, muss mit
+    ihrem Namen genau einen Befehl in der Vorlage mit dem Behaeltertitel X
+    haben (Muster: vb_bild_vw17_bau_skripte/namen_probe.py).
+
+    Rueckgabe: False, wenn die Sprachdatei keine solche Zeile traegt (aelterer
+    Stand - dann misst die alte Pruefung), sonst True.
+    """
+    import html
+    import json
+    import os
+    import shutil
+    import tempfile
+    ini = (wurzel / "templates/lang/language_de.ini").read_text(encoding="utf-8")
+    zeilen = []
+    for schl, wert in re.findall(r'^(Z\d+_\d+) = "(.*)"$', ini, re.M):
+        teile = [html.unescape(t.strip()) for t in wert.split("|")]
+        m = re.search(r"\(Vorlage „([^“]+)“\)$", teile[0])
+        if m and len(teile) >= 2:
+            zeilen.append((schl, m.group(1), teile[1]))
+    if not zeilen:
+        return False
+    phps = [Path(p) for p in (r"C:\tmp\php-8.4.27-Win32-vs17-x64\php.exe",
+                              r"C:\tmp\php-7.4.33-Win32-vc15-x64\php.exe")]
+    php = next((p for p in phps if p.is_file()), None)
+    if php is None:
+        print("[ -- ] Namen der %d Tabellenzeilen mit Vorlage nicht geprueft - "
+              "kein PHP da, die Vorlagen liessen sich nicht erzeugen" % len(zeilen))
+        hinw("Tabellenzeilen gegen die erzeugten Vorlagen: nicht messbar (kein PHP).")
+        return True
+    cfg = (wurzel / "plugin.cfg").read_text(encoding="utf-8", errors="replace")
+    m = re.search(r"^FOLDER=(\S+)", cfg, re.M)
+    ordner = m.group(1) if m else "audiconnect"
+    aufrufe = ["au_vorlage(1, '%s')" % a for a in ("status", "laden", "wartung", "position")]
+    aufrufe.append("au_vorlage_vo(1)")
+    lb = Path(tempfile.mkdtemp(prefix="au_pruefen_lb_"))
+    try:
+        for t in ("config", "data", "log"):
+            (lb / t / "plugins").mkdir(parents=True)
+        skript = lb / "vorlagen.php"
+        skript.write_text(
+            "<?php\n$_SERVER['HTTP_HOST'] = 'loxberry';\n"
+            "require %s;\n$p = au_paths();\n"
+            "if (realpath($p['home']) !== realpath(getenv('LBHOMEDIR'))) "
+            "{ fwrite(STDERR, \"au_paths() zeigt nicht auf die Attrappe\\n\"); exit(2); }\n"
+            "$aus = array();\n%s"
+            "echo json_encode($aus);\n"
+            % (json.dumps(str((wurzel / "webfrontend/html/au_lib.php").resolve())),
+               "".join("$v = %s; $aus[] = $v[1];\n" % a for a in aufrufe)),
+            encoding="utf-8")
+        umg = dict(os.environ)
+        umg.update({"LBHOMEDIR": str(lb), "LBPPLUGINDIR": ordner, "LBLANG": "de",
+                    "PYTHONDONTWRITEBYTECODE": "1"})
+        r = subprocess.run([str(php), "-n", "-d", "display_errors=1",
+                            "-d", "error_reporting=32767",
+                            "-d", "date.timezone=Europe/Berlin", str(skript)],
+                           capture_output=True, cwd=str(lb), env=umg, timeout=60)
+    finally:
+        shutil.rmtree(str(lb), ignore_errors=True)
+    aus = r.stdout.decode("utf-8", "replace")
+    try:
+        texte = json.loads(aus)
+    except ValueError:
+        texte = None
+    if r.returncode != 0 or r.stderr.strip() or texte is None:
+        fehl("Die Vorlagen liessen sich nicht erzeugen (rc %d): %s"
+             % (r.returncode, (r.stderr.decode("utf-8", "replace") + aus).strip()[:300]))
+        return True
+    vorlagen = {}
+    for t in texte:
+        kopf = re.search(r'<(?:VirtualInHttp|VirtualOut) [^>]*?Title="([^"]*)"', t)
+        if kopf:
+            vorlagen.setdefault(html.unescape(kopf.group(1)), []).extend(
+                html.unescape(x) for x in
+                re.findall(r'<(?:VirtualInHttpCmd|VirtualOutCmd) Title="([^"]*)"', t))
+    befunde = []
+    for schl, beh, name in zeilen:
+        if beh not in vorlagen:
+            befunde.append("%s: Vorlage '%s' erzeugt das Plugin nicht" % (schl, beh))
+        elif vorlagen[beh].count(name) != 1:
+            befunde.append("%s: '%s' steht %d-mal in der Vorlage '%s'"
+                           % (schl, name, vorlagen[beh].count(name), beh))
+    if befunde:
+        fehl("Tabellenzeilen nennen Namen, die die erzeugte Vorlage nicht traegt: "
+             + "; ".join(befunde))
+    else:
+        print("[OK]   Alle %d Tabellenzeilen mit Vorlage finden ihren Namen genau "
+              "einmal in der erzeugten Vorlage (%d Vorlagen, PHP %s)"
+              % (len(zeilen), len(vorlagen), php.parent.name.split("-")[1]))
+    return True
+
+
 def pruefe_bausteinnamen(wurzel):
     """Jeder virtuelle Eingang der Baustein-Liste muss es auch geben.
 
@@ -815,6 +1155,8 @@ def pruefe_bausteinnamen(wurzel):
     Befehlserkennung gescheitert, die nie etwas empfaengt - und haette lange
     gesucht, weil alles andere funktioniert.
     """
+    if pruefe_tabellennamen(wurzel):
+        return
     lib = next(wurzel.glob("webfrontend/html/*_lib.php")).read_text(encoding="utf-8")
     felder = set()
     for fn in ("status", "laden", "wartung", "position"):
@@ -848,16 +1190,23 @@ def main():
     wurzel = Path(sys.argv[1])
     print("Pflichtpruefung fuer", wurzel.name)
     print("-" * 72)
-    pruefe_php(wurzel)
-    pruefe_sprache(wurzel)
-    pruefe_oberflaeche(wurzel)
-    pruefe_bausteinnamen(wurzel)
-    pruefe_endpunkt(wurzel)
-    pruefe_vorlage(wurzel)
-    pruefe_python(wurzel)
-    pruefe_shell(wurzel)
-    pruefe_zusammenspiel(wurzel)
-    pruefe_rest(wurzel)
+    # V1d (08.10.2026): ein Absturz einer Teilpruefung beendete das Werkzeug,
+    # BEVOR es seine Befundliste ausgab - ab AudiConnect 0.9.22 zeigte der
+    # Lauf deshalb keine einzige Beanstandung (AGENTEN_AUFTRAG Nr. 12: ein
+    # schweigendes Werkzeug ist kein Befund "ohne"). Jetzt wird der Absturz
+    # selbst ein Befund, die uebrigen Teilpruefungen laufen weiter, und der
+    # Rueckgabewert ist 1.
+    import traceback
+    for teil in (pruefe_php, pruefe_sprache, pruefe_oberflaeche,
+                 pruefe_bausteinnamen, pruefe_endpunkt, pruefe_vorlage,
+                 pruefe_python, pruefe_shell, pruefe_zusammenspiel, pruefe_rest):
+        try:
+            teil(wurzel)
+        except Exception as err:
+            stelle = traceback.extract_tb(err.__traceback__)[-1]
+            fehl("Teilpruefung %s abgestuerzt (%s: %s, Zeile %d) - was danach in ihr "
+                 "stand, ist NICHT geprueft" % (teil.__name__, type(err).__name__,
+                                                str(err)[:120], stelle.lineno))
     print("-" * 72)
     for h in HINWEISE:
         print("[INFO]", h)

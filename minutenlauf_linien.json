@@ -1,0 +1,52 @@
+{
+ "_hinweis": "Angaben je Linie fuer minutenlauf_pruefen.py, Schluessel = FOLDER. konfig: Datei relativ zur Wurzel, <O> = Plugin-Ordner. sub: Zeilen der mosquitto_sub-Attrappe. cron: Cron-Dateien, sonst die haeufigste. Alle Werte erfunden. rc_erlaubt: Rueckgaben neben 0, durch Leerzeichen getrennt, nur mit Grund (Waermepumpe: wp_abruf.php gibt ohne Netz bewusst 1). vorlauf: Datei unter minutenlauf_attrappen/, wird vor dem Einstieg geladen (Renault: rn_http_senden, Herkunft vb_g40_rn_bau_skripte/attrappe). frist: Sekunden je Lauf fuer Einstiege, die absichtlich die ganze Minute laufen (EVCC: ev_abruf.php cron), dazu rc_erlaubt 124. Raumklima: raumklima_abruf.php gibt 1, wenn Quellen melden (ohne Netz immer).",
+ "mgismart": {
+  "konfig": {
+   "config/plugins/<O>/mg.json": "{\"aktionstoken\":\"s1cprobe\",\"saic_user\":\"x@example.org\",\"vins\":[\"PROBE00000000001\"],\"namen\":[\"Probe\"],\"mqtt_ein\":1,\"prefix\":\"saic\"}",
+   "config/plugins/alexang/alexang.json": "{\"sprechtoken\":\"ProbeToken0123456789ab\",\"standardgeraet\":\"Flur\"}"
+  },
+  "sub": [
+   "saic/x@example.org/vehicles/PROBE00000000001/drivetrain/soc 50",
+   "saic/x@example.org/vehicles/PROBE00000000001/drivetrain/socTarget 80",
+   "saic/x@example.org/vehicles/PROBE00000000001/drivetrain/charging false",
+   "saic/x@example.org/vehicles/PROBE00000000001/drivetrain/chargerConnected true",
+   "saic/x@example.org/vehicles/PROBE00000000001/doors/locked true"
+  ]
+ },
+ "renault_ng": {
+  "cron": [
+   "cron.01min",
+   "cron.03min"
+  ],
+  "konfig": {
+   "config/plugins/<O>/config.php": "<?php\n$aktionstoken = 'probe0000000000000000000';\n$username = 'nutzer@example.invalid';\n$password = 'GeheimKW1';\n$vin = 'BEISPIEL000000001';\n$zoename = 'Zoe';\n$zoeph = '2';\n$endpunkt_ein = 'Y';\n$mqtt_ein = 'Y';\n"
+  },
+  "sub": [
+   "0 haus/abfahrt/in_min 3435"
+  ],
+  "vorlauf": "rn_attrappe.php"
+ },
+ "waermepumpe": {
+  "konfig": {
+   "config/plugins/<O>/waermepumpe.json": "{\"hersteller\":\"myuplink\",\"mqtt_ein\":1}"
+  },
+  "rc_erlaubt": "1"
+ },
+ "abfahrtsassistent": {
+  "konfig": {
+   "config/plugins/<O>/abfahrt.json": "{\"calendars\":[{\"name\":\"Probe\",\"url\":\"https://example.invalid/k.ics\"}],\"mqtt_ein\":1}"
+  }
+ },
+ "actikamera": {
+  "konfig": {
+   "config/plugins/<O>/cam.json": "{\"mqtt_enabled\":1,\"pruef_minuten\":1}"
+  }
+ },
+ "evcc": {
+  "frist": "8",
+  "rc_erlaubt": "124"
+ },
+ "raumklima": {
+  "rc_erlaubt": "1"
+ }
+}

@@ -1,3 +1,26 @@
+#!/usr/bin/perl
+# "use JSON;" STEHT HIER OBEN, VOR DER package-ZEILE - das ist kein
+# Schoenheitsfehler, sondern der Nachbau des Originals.
+#
+# /opt/loxberry/libs/perllib/LoxBerry/JSON.pm hat in Zeile 2 "use JSON;",
+# waehrend "package LoxBerry::JSON;" erst in Zeile 6 kommt (am 07.09.2026
+# an der Anlage gelesen). Zum Zeitpunkt des Imports ist das laufende Paket
+# also noch MAIN - JSON.pm setzt encode_json und decode_json mit dem
+# Prototyp ($) unmittelbar in den Namensraum des AUFRUFERS.
+#
+# Genau daran haengt ein Fehler, der acht Fassungen lang durchging: ein
+# Plugin, das nach LoxBerry::JSON noch "use JSON::PP qw(decode_json)"
+# einband, bekam auf der Anlage bei JEDEM Lauf
+#
+#     Prototype mismatch: sub main::decode_json ($) vs none
+#
+# Gegen diese Attrappe kam die Meldung nie, weil hier weder "use JSON;"
+# noch ein Prototyp stand. Beides ist am 07.09.2026 nachgetragen und in
+# beide Richtungen geeicht (Smartmeter classic 2.7.2 meldet, 2.8.0 nicht).
+# Eine Attrappe darf nachsichtiger sein als das Original bei der UMGEBUNG,
+# nie bei der SCHNITTSTELLE - und ein Prototyp gehoert zur Schnittstelle.
+use JSON;
+
 package LoxBerry::JSON;
 
 # Attrappe des LoxBerry-Kernmoduls LoxBerry::JSON.

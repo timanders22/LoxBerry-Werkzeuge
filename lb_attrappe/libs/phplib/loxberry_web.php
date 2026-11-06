@@ -27,8 +27,34 @@ class LBWeb
     public static function pageend() { echo "<!-- pageend -->\n"; }
     public static function foot() { echo "<!-- foot -->\n"; }
     public static function gethelp($file = '', $key = '') { return '<p>Hilfe-Attrappe</p>'; }
+    /* ==================================================================
+     * loglist_html() kann jetzt auch NICHTS liefern - gehaertet 29.08.2026
+     * ==================================================================
+     *
+     * Bis dahin lieferte die Attrappe IMMER eine Zeichenkette. Damit war der
+     * Fall, der auf dem Geraet der haeufigere ist, nicht pruefbar: die
+     * Funktion listet die ueber LoxBerry::Log ANGEMELDETEN Protokolle. Ein
+     * Plugin, dessen Dienst seine Datei selbst schreibt - etwa mit einem
+     * RotatingFileHandler aus Python -, meldet nichts an, und LoxBerry
+     * liefert voellig korrekt eine leere Liste.
+     *
+     * Aufgefallen an Midea2Lox 4.3.1: der Reiter "Logdateien" zeigte auf dem
+     * Geraet ausser der Ueberschrift NICHTS, waehrend jeder Prueflauf ihn
+     * gefuellt sah. Das Plugin hatte ein Entweder-oder gebaut - gibt es
+     * loglist_html(), wird nur die benutzt - und die Attrappe hat den Fehler
+     * zugedeckt.
+     *
+     * LB_ATTRAPPE_LOGLIST=leer stellt den Fall her. Ohne die Variable
+     * aendert sich nichts; kein vorhandener Prueflauf wird anders.
+     *
+     * Wer diesen Lauf ansetzt und einen leeren Reiter findet, hat einen
+     * echten Befund - keinen Fehler der Attrappe.
+     * ================================================================== */
     public static function loglist_html($p = array())
     {
+        if (getenv('LB_ATTRAPPE_LOGLIST') === 'leer') {
+            return '';
+        }
         return '<div class="loglist">Protokoll-Attrappe</div>';
     }
     public static function logfile_button_html($p = array()) { return '<a href="#">Protokoll</a>'; }

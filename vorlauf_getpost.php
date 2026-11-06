@@ -15,6 +15,17 @@
  * Es wird ausdruecklich NICHTS zurechtgebogen: Werte kommen so an, wie sie
  * in der Adresse stehen. parse_str() macht dieselbe Zerlegung wie der
  * Webserver.
+ *
+ * NACHTRAG 13.09.2026: dazu der Vorgabewert fuer $_SERVER['REQUEST_METHOD']
+ * am Dateiende. Er fehlte hier, waehrend vorlauf.php ihn seit je setzt - und
+ * ohne ihn meldete JEDE Seite, die REQUEST_METHOD ohne isset() liest, unter
+ * PHP 7.4 einen HINWEIS und unter 8.4 eine WARNUNG, auf jedem Reiter neu.
+ * Gemessen an APC-UPS 1.2.8: zehn Scheinbefunde in einem Lauf. Auf dem Geraet
+ * kann das nicht auftreten, die Webserver-SAPI setzt REQUEST_METHOD immer -
+ * es war also ein Befund am Pruefstand, keiner am Plugin. Ueber den ganzen
+ * Bestand nachgemessen (256 Linien mit Oberflaeche, je unter 7.4 und 8.4):
+ * 111 Linien verlieren mit diesem Nachtrag 1026 Scheinbefunde, 513 je
+ * PHP-Fassung; keine Linie bekommt etwas dazu.
  */
 
 $GLOBALS['_BEFUNDE'] = array();
@@ -59,4 +70,10 @@ if ($pj !== false && $pj !== '') {
             $_SERVER['REQUEST_METHOD'] = 'POST';
         }
     }
+}
+
+/* Der Vorgabewert - NACH dem POST-Zweig, damit ein POST-Lauf 'POST' behaelt.
+ * Wortgleich mit vorlauf.php: gesetzt wird nur, was nicht schon dasteht. */
+if (!isset($_SERVER['REQUEST_METHOD'])) {
+    $_SERVER['REQUEST_METHOD'] = 'GET';
 }

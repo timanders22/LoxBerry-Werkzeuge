@@ -94,10 +94,17 @@ HC = ww.ableiten({"anbieter": "homeconnect", "id": "SIEMENS-ABC-1", "name": "Was
                   "zustand": ww.BEREIT, "fernstart_frei": 1})
 MI = ww.ableiten({"anbieter": "miele", "id": "000160102030", "name": "Geschirrspueler",
                   "zustand": ww.BEREIT, "fernstart_frei": 1})
+# st_faehigkeit setzt st_abbilden() aus dem gemeldeten Zustand; ohne sie weist
+# der Dienst Start/Stopp/Pause ab (nur ein/aus gehen ueber 'switch').
 ST = ww.ableiten({"anbieter": "smartthings", "id": "abc-123", "name": "Trockner",
-                  "zustand": ww.BEREIT, "fernstart_frei": 1})
+                  "zustand": ww.BEREIT, "fernstart_frei": 1,
+                  "st_faehigkeit": "washerOperatingState"})
 GESPERRT = ww.ableiten({"anbieter": "homeconnect", "id": "SIEMENS-ABC-2", "name": "Backofen",
                         "zustand": ww.BEREIT, "fernstart_frei": 0})
+# Seit 0.9.7 waehlt der Dienst ueber die feste Nummer (nummern_zuordnen()),
+# nicht ueber die Position in der Liste - der Test setzt sie wie der Dienst.
+for _nr, _g in enumerate((HC, MI, ST, GESPERRT), start=1):
+    _g["nummer"] = _nr
 GERAETE = [HC, MI, ST, GESPERRT]
 
 
@@ -185,6 +192,19 @@ pruefe("ST start: Befehl", rumpf["command"], "setMachineState")
 pruefe("ST start: Argument", rumpf["arguments"], ["run"])
 ruf({"aktion": "ein", "geraet": "3"}, code=200)
 pruefe("ST ein: switch on", json.loads(SPUR[0][2])["commands"][0]["command"], "on")
+# Ein Geraet ohne Betriebszustands-Faehigkeit: Start abweisen, nichts senden;
+# ein/aus gehen weiter ueber 'switch'.
+ST_NUR_SCHALTER = dict(ST, st_faehigkeit="")
+SPUR.clear()
+r = ww.befehl_ausfuehren(Attrappe(200), CFG, Z, marken(), [ST_NUR_SCHALTER],
+                         {"aktion": "start", "geraet": "3"})
+pruefe("ST ohne Faehigkeit: Start abgelehnt", r[0], 0)
+pruefe("ST ohne Faehigkeit: Grund genannt", "Betriebszustands-Faehigkeit" in r[1], True)
+pruefe("ST ohne Faehigkeit: nichts gesendet", SPUR, [])
+SPUR.clear()
+r = ww.befehl_ausfuehren(Attrappe(200), CFG, Z, marken(), [ST_NUR_SCHALTER],
+                         {"aktion": "aus", "geraet": "3"})
+pruefe("ST ohne Faehigkeit: aus geht", r[0], 1)
 
 # --- Ablehnungen des Anbieters --------------------------------------------
 r = ruf({"aktion": "start", "geraet": "1"}, code=409, rumpf={"error": {"key": "SDK.Error"}})

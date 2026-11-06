@@ -89,7 +89,10 @@ def pruefe(ziel, verzeichnis='stand'):
     datei = oberflaeche(ziel, verzeichnis)
     if datei is None:
         return None
-    html, _ = W.lauf(datei, Path(ziel).name)
+    # Drei Rueckgabewerte seit 31.08.2026: Ausgabe, Befunde des Vorlaufs,
+    # Rueckgabewert des PHP-Laufs. Der dritte wird hier nicht gebraucht -
+    # er MUSS aber entgegengenommen werden.
+    html, _befunde, _rest = W.lauf(datei, Path(ziel).name)
     if not html.strip():
         return ['Seite leer - nicht pruefbar']
     tiefe = 0
@@ -112,7 +115,44 @@ def pruefe(ziel, verzeichnis='stand'):
         aus.append('%d Formular(e) nie geschlossen' % tiefe)
     if zuviel:
         aus.append('%d </form> ohne oeffnendes <form>' % zuviel)
+    aus.extend(merkmal_luecken(html))
     return aus
+
+
+MERKMALNAME = re.compile(r'(token|merkmal|fmt|formkey|_form)$', re.I)
+
+
+def merkmal_luecken(html):
+    """POST-Formulare ohne das Merkmal, das die uebrigen tragen (29.09.2026).
+
+    APC-UPS NG 1.2.14: den beiden Sicherungsformularen fehlte das Feld
+    `ap_form`, jeder Klick wurde abgewiesen - und keine Pruefung merkte es:
+    wirkungstest.py sieht nur, ob die Konfiguration gleich bleibt, und ein
+    abgewiesenes Formular aendert nichts. Gemessen wird an der gerenderten
+    Seite: das Merkmal ist das versteckte Feld mit Merkmal-Namen, das die
+    MEHRHEIT der POST-Formulare traegt; jedes POST-Formular ohne dieses Feld
+    ist ein Befund. Tragen weniger als zwei Formulare ein Merkmal, wird nichts
+    behauptet (keine Grundmenge)."""
+    formen = re.findall(r'<form\b([^>]*)>(.*?)</form\s*>', html, re.I | re.S)
+    post = [(k, r) for k, r in formen if re.search(r'method\s*=\s*["\']?post', k, re.I)]
+    if len(post) < 2:
+        return []
+    zaehl = {}
+    for _k, rumpf in post:
+        namen = set(re.findall(r'<input\b[^>]*type\s*=\s*["\']?hidden[^>]*name\s*=\s*["\']([^"\']+)', rumpf, re.I))
+        namen |= set(re.findall(r'<input\b[^>]*name\s*=\s*["\']([^"\']+)["\'][^>]*type\s*=\s*["\']?hidden', rumpf, re.I))
+        for n in namen:
+            if MERKMALNAME.search(n):
+                zaehl[n] = zaehl.get(n, 0) + 1
+    if not zaehl:
+        return []
+    name, anzahl = max(zaehl.items(), key=lambda x: x[1])
+    if anzahl < 2 or anzahl * 2 <= len(post):
+        return []
+    ohne = len(post) - anzahl
+    if not ohne:
+        return []
+    return ['%d von %d POST-Formularen ohne das Merkmal %r' % (ohne, len(post), name)]
 
 
 def main():

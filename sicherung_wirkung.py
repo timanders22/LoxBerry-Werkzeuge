@@ -2,7 +2,7 @@
 """Traegt die Sicherung wirklich - und lehnt sie ab, was sie ablehnen muss?
 
 Gemessen an der GERENDERTEN Seite und an der Konfigurationsdatei, nicht am
-Quelltext. Vier Faelle je Plugin:
+Quelltext. Fuenf Faelle je Plugin:
 
     1. der Sicherungsknopf und das Rueckspielformular stehen auf der Seite
     2. eine gueltige Sicherung wird UEBERNOMMEN
@@ -10,6 +10,13 @@ Quelltext. Vier Faelle je Plugin:
        zwar VOLLSTAENDIG: die Konfiguration bleibt Byte fuer Byte, wie sie
        war. Das ist der Punkt, an dem es haengt.
     4. eine Datei, die kein JSON ist, wird abgelehnt
+    5. eine gueltige Datei, der ein Schluessel FEHLT, wird abgelehnt
+       oder wenigstens beanstandet - nicht still auf Werk gesetzt
+
+Der fuenfte Fall kam am 07.09.2026 dazu. Er fehlte, und deshalb meldeten
+31 Linien "gueltig:ok fremd:ok kaputt:ok", waehrend sie eine halbe
+Konfiguration stillschweigend mit Werkswerten auffuellten. Ein Pruefstand,
+der eine Fehlerklasse nicht kennt, bescheinigt ihre Abwesenheit.
 
 Der dritte Fall ist der wichtige. Eine zur Haelfte uebernommene
 Konfiguration ist schlimmer als die alte - und man sieht es ihr nicht an.
@@ -155,29 +162,101 @@ def pruefe(o):
         "foreach (array('_sicherungsschluessel', '_schluessel') as $e2) {\n"
         "    if (function_exists($GLOBALS['pp'] . $e2)) { $liste = $GLOBALS['pp'] . $e2; break; }\n"
         "}\n"
-        "$gut = ($liste !== '') ? json_encode(array_fill_keys($liste(), 'x'))\n"
-        "                       : json_encode(" + vorg + "());\n"
+        # Die WERTE kommen aus der Vorgabenfunktion, wenn es eine gibt -
+        # auch dann, wenn eine Schluesselliste die AUSWAHL bestimmt.
+        # 'x' fuer alles war die Ursache des Fehlalarms an Intercom 2.2.8
+        # (07.09.2026): 18 von 31 Werten wurden zu Recht beanstandet, und
+        # eine Linie, die richtig arbeitet, bekam gueltig:ROT.
+        "$basis = array();\n"
+        "foreach (array('_vorgaben', '_defaults') as $e3) {\n"
+        "    if (function_exists($GLOBALS['pp'] . $e3)) {\n"
+        "        $b = call_user_func($GLOBALS['pp'] . $e3);\n"
+        "        if (is_array($b)) { $basis = $b; }\n"
+        "        break;\n"
+        "    }\n"
+        "}\n"
+        "if ($liste !== '') {\n"
+        # Zwei Proben, und es gilt die bessere. Der Ersatzwert fuer
+        # Schluessel ohne Vorgabe wird abgetastet, nicht angenommen:
+        # Intercom fuehrt 'stationen' in der Liste, aber nicht in den
+        # Vorgaben, und dort verlangt der Wertpruefer ein Feld.
+        "    $bau = function ($ersatz) use ($liste, $basis) {\n"
+        "        $g = array();\n"
+        "        foreach ($liste() as $lk) {\n"
+        "            $g[$lk] = array_key_exists($lk, $basis) ? $basis[$lk] : $ersatz;\n"
+        "        }\n"
+        "        return json_encode($g);\n"
+        "    };\n"
+        "    $pA = $bau(''); $pB = $bau(array());\n"
+        "    $nA = $fn($pA); $nB = $fn($pB);\n"
+        "    $cA = (is_array($nA) && isset($nA[1]) && is_array($nA[1])) ? count($nA[1]) : 99;\n"
+        "    $cB = (is_array($nB) && isset($nB[1]) && is_array($nB[1])) ? count($nB[1]) : 99;\n"
+        "    $gut = ($cB < $cA) ? $pB : $pA;\n"
+        "} else {\n"
+        "    $gut = json_encode(" + vorg + "());\n"
+        "}\n"
+
         # Die FORM feststellen, bevor geurteilt wird. WOLF liefert nur zwei
         # Werte statt dreien und liest Textzeilen ("schluessel wert") statt
         # JSON - die native Sicherungsform des ISM-Geraets. Mit JSON gefuettert
         # lehnt es zu Recht ab; das als roten Befund zu melden waere ein Fehler
         # des Pruefstands, nicht des Plugins.
+        # DREI ODER MEHR, nicht genau drei.
+        #
+        # Hier stand "count($r) !== 3". Das wies eine Linie ab, die einen
+        # VIERTEN Wert zurueckgibt - Octopus 1.1.0 reicht die Zugangsdaten
+        # gesondert heraus, weil sie in eine eigene Datei mit Rechten 0600
+        # gehoeren und nicht in die Konfiguration. Das ist dieselbe Bauart
+        # mit einem Anhang, keine andere; gemeldet wurde trotzdem
+        # "andere Bauart - von Hand ansehen", und damit hat das Werkzeug
+        # NICHT gemessen, statt etwas zu finden. Ein Werkzeug, das den
+        # Pruefling stillschweigend ueberspringt, entlastet nicht.
+        #
+        # Die Untergrenze bleibt: die Zwei-Werte-Form (WOLF, Zendure,
+        # Funkwacht) wird weiterhin erkannt und ausgenommen, denn fuer sie
+        # bedeutet $r[0] etwas anderes.
         "$r = $fn($gut);\n"
-        "if (!is_array($r) || count($r) !== 3) { echo 'ANDERE_BAUART'; exit; }\n"
+        "if (!is_array($r) || count($r) < 3) { echo 'ANDERE_BAUART'; exit; }\n"
         "$form = (is_array($r[0]) || $r[0] === null) && is_array($r[1]) ? 'neu' : 'alt';\n"
         "if ($form === 'alt') { echo 'ANDERE_BAUART'; exit; }\n"
         "list($a, $m1, $n1) = $r;\n"
         "$d = json_decode($gut, true); $d['gibtesnicht'] = 1;\n"
         "list($b, $m2, $n2) = $fn(json_encode($d));\n"
         "list($c, $m3, $n3) = $fn('kein json');\n"
+        # Der fuenfte Fall: EIN Schluessel fehlt. Nicht die Haelfte - einer.
+        # Das ist zugleich der wahrscheinlichste Fall im Feld: eine Sicherung
+        # aus einer aelteren Fassung des Plugins, die einen spaeter
+        # hinzugekommenen Schluessel noch nicht kennt.
+        #
+        # Verglichen wird gegen die Maengelliste des GUELTIGEN Laufs, nicht
+        # gegen die leere Liste: manche Linien melden auch bei einer
+        # einwandfreien Datei einen Hinweis, und der ist kein Fund.
+        "$dl = json_decode($gut, true);\n"
+        "$schl = is_array($dl) ? array_keys($dl) : array();\n"
+        "$vier = 'NICHTMESSBAR';\n"
+        "if (count($schl) >= 2) {\n"
+        "    unset($dl[$schl[0]]);\n"
+        "    $rv = $fn(json_encode($dl));\n"
+        "    if (is_array($rv) && count($rv) >= 3) {\n"
+        "        $e = $rv[0]; $m4 = $rv[1];\n"
+        "        $z1 = is_array($m1) ? count($m1) : 0;\n"
+        "        $z4 = is_array($m4) ? count($m4) : 0;\n"
+        "        $vier = ($e === null) ? 'ABGELEHNT'\n"
+        "                              : (($z4 > $z1) ? 'GEMELDET' : 'STILL');\n"
+        "    }\n"
+        "}\n"
         # Die Rueckgabe ist nicht ueberall gleich gebaut: die neuen Funktionen
         # liefern array(Konfiguration|null, Maengel, Anzahl), Zendure und
         # Funkwacht array(ok, Meldung). Wer nur die erste Form kennt, meldet
         # fuer die zweite ein rotes Kreuz, das nichts bedeutet - und genau
         # davor warnt REGELN_4. Deshalb wird die FORM erst festgestellt.
-        "printf(\"%s|%s|%s\", $a === null ? 'ABGELEHNT' : 'UEBERNOMMEN',\n"
+        # Wurde die GUELTIGE Probe beanstandet, taugt die Probe nicht -
+        # das ist keine Aussage ueber das Plugin. Die Zahl wird
+        # mitgegeben, damit man sieht, wie weit es daneben lag.
+        "$z1x = is_array($m1) ? count($m1) : 0;\n"
+        "printf(\"%s|%s|%s|%s|%d\", $a === null ? 'ABGELEHNT' : 'UEBERNOMMEN',\n"
         "       $b === null ? 'ABGELEHNT' : 'UEBERNOMMEN',\n"
-        "       $c === null ? 'ABGELEHNT' : 'UEBERNOMMEN');\n")
+        "       $c === null ? 'ABGELEHNT' : 'UEBERNOMMEN', $vier, $z1x);\n")
     umg = dict(os.environ)
     umg['LBHOMEDIR'] = os.path.join(HIER, 'lb')
     umg['LBPPLUGINDIR'] = name
@@ -196,14 +275,36 @@ def pruefe(o):
         urteile.append('--  andere Bauart - von Hand ansehen')
         return urteile
     aus = roh.split('|')
-    if len(aus) != 3:
+    if len(aus) != 5:
         urteile.append('-- nicht messbar (%s)' % (r.stdout or r.stderr or '').replace(chr(10),' ')[:150])
         return urteile
-    gut, fremd, kaputt = aus
+    gut, fremd, kaputt, luecke, z1 = aus
     teile = []
-    teile.append('gueltig:' + ('ok' if gut == 'UEBERNOMMEN' else 'ROT'))
+    if gut != 'UEBERNOMMEN' and z1.isdigit() and int(z1) > 0:
+        # Die Probe wurde beanstandet, nicht das Plugin ertappt. Intercom
+        # 2.2.8 prueft jeden Wert und arbeitet fail closed; mit einer
+        # unplausiblen Probe lehnt es zu Recht ab.
+        teile.append('gueltig:probe-untauglich (%s)' % z1)
+    else:
+        teile.append('gueltig:' + ('ok' if gut == 'UEBERNOMMEN' else 'ROT'))
     teile.append('fremd:' + ('ok' if fremd == 'ABGELEHNT' else 'ROT'))
     teile.append('kaputt:' + ('ok' if kaputt == 'ABGELEHNT' else 'ROT'))
+    # Der fuenfte Fall. NICHTMESSBAR ist KEIN Haken: es heisst, die Probe
+    # hatte weniger als zwei Schluessel, es wurde also nichts angesehen.
+    #
+    # ZWEI BAUARTEN. Wer als Grundlage die WERKSVORGABE ansetzt, muss eine
+    # unvollstaendige Datei beanstanden - sonst faellt jeder fehlende Wert
+    # still auf Werk. Wer den LAUFENDEN Stand ansetzt (Midea2Lox mit
+    # mi_config_read(), Pumpenwacht mit pw_config()), hat denselben Schaden
+    # schon abgewendet: dort bleibt ein fehlender Schluessel einfach stehen.
+    # Fuer diese Bauart gilt der strenge Massstab nicht, und ein rotes Kreuz
+    # dafuer waere ein Fehlalarm - einer, an den man sich gewoehnt.
+    streng = bool(re.search(r'_(?:vorgaben|defaults)$', vorg))
+    if luecke == 'STILL' and not streng:
+        teile.append('luecke:andere-grundlage (%s)' % vorg)
+    else:
+        teile.append('luecke:' + {'ABGELEHNT': 'ok', 'GEMELDET': 'ok',
+                                  'STILL': 'ROT'}.get(luecke, '--'))
     urteile.append(' '.join(teile))
     return urteile
 

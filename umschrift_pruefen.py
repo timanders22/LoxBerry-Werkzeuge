@@ -20,8 +20,21 @@ jedes ue/ae/oe ist ein Umlaut: "Steuerung", "Quelle", "neue", "virtueller",
 ECHT; wer eines vermisst, traegt es dort nach - mit demselben Blick, mit dem
 man es sonst von Hand uebersehen haette.
 
-Angesehen wird nur der WERT von language_de.ini und help_de.ini. Der
+Angesehen wird der WERT von language_de.ini und help_de.ini. Der
 Schluesselname bleibt aussen vor: er ist ein Bezeichner, kein Text.
+
+ERWEITERT 06.09.2026, Anlass Marstek Venus E 1.1.6. Dort standen vier
+Umschriften in den Zeichenketten, aus denen die LOXONE-VORLAGEN gebaut
+werden - "Steuerbefehle ueber das Plugin", "Sollwert setzen (W, + laedt /
+- entlaedt)" -, und der Anwender sah sie nach dem Import in Loxone Config
+auf dem Bildschirm. Dieses Werkzeug fand sie nicht, weil es nur die
+Sprachdateien las. Seither wird ausserdem angesehen: der WERT der Array-
+Schluessel 'kurz', 'text', 'title' und 'comment' in PHP-Dateien unter
+webfrontend/. Das ist das Hausmuster der Feldtabelle (marstek_felder,
+apcups_felder, ...) und der Vorlagenbauer - genau die Stellen, deren Text
+in eine Vorlage oder in die Oberflaeche geht. Bewusst NICHT angesehen:
+jede andere Zeichenkette in PHP. Kommentare und Protokollzeilen duerfen
+Umschrift tragen; die sieht kein Anwender.
 """
 
 import io
@@ -79,7 +92,10 @@ BEZEICHNER = {
     'boerse', 'bruecke', 'mbruecke', 'ibruecke', 'imbruecke', 'durchlaeufe',
     'idurchlaeufe', 'flaeche', 'iflaeche', 'iflaecheg', 'giessen', 'igiessen',
     'geraet', 'geraetn', 'geraete', 'iaussen', 'ilaedt', 'laedt', 'imaeht',
-    'maeht', 'laeuft', 'kueche', 'muell', 'stromzaehler', 'tuer', 'tueren',
+    # 'laeuft' stand hier bis 03.09.2026 und nahm das Wort UEBERALL aus,
+    # auch in Prosa (Anlass WOLF-ISM-NG 3.0.10, sechs uebersehene Stellen).
+    # Die Loxone-Namen dazu (LAEUFT, iLAEUFT) erkennt jetzt ist_bezeichner().
+    'maeht', 'kueche', 'muell', 'stromzaehler', 'tuer', 'tueren',
     'zoephp', 'zoe', 'raes', 'woerstenfeld', 'volkszaehler', 'weissware',
     # Ergaenzt 20.08.2026 aus Audi Connect 0.9.8. Beide Faelle sind keine
     # Umschrift, sondern muessen genau so stehen:
@@ -121,22 +137,63 @@ MONO = re.compile(
 
 
 def verdaechtig(w):
-    """True, wenn das Wort nach ASCII-Umschrift aussieht."""
+    """True, wenn das Wort nach ASCII-Umschrift aussieht.
+
+    BERICHTIGT am 04.09.2026, Anlass WOLF-ISM-NG 3.0.10. Das Werkzeug meldete
+    dort "0 Fundstellen", waehrend in `language_de.ini` sechs Umschriften in
+    ANGEZEIGTEM Text standen (`laeuft` viermal, `Laeuft` zweimal,
+    `Loeschauftraege` einmal). Zwei verschiedene Ursachen:
+
+    1. `laeuft` stand in BEZEICHNER - aufgenommen wegen Loxone-Namen wie
+       `iLAEUFT`. Damit war das Wort UEBERALL ausgenommen, auch in Prosa.
+       Die Namen sind aber am Umfeld erkennbar: sie stehen in Grossbuchstaben
+       oder tragen den `i`-Vorsatz. Genau das prueft jetzt `ist_bezeichner()`,
+       und `laeuft` ist aus der Liste heraus.
+
+    2. `Loeschauftraege` fiel durch den Stamm `schau` aus ECHT_TEIL heraus -
+       `loes|chau|ftraege` enthaelt ihn zufaellig als Teilzeichenkette. Ein
+       Stamm nimmt jetzt nur noch das ue/ae/oe aus, das WIRKLICH IN IHM liegt;
+       das `oe` in `Loesch` bleibt sichtbar.
+    """
     klein = w.lower()
     if klein in ECHT_WORT or klein in BEZEICHNER:
         return False
-    if any(t in klein for t in ECHT_TEIL):
-        return False
-    treffer = PAAR.search(klein)
-    if not treffer:
+    if ist_bezeichner(w):
         return False
     # Ein Wort, das schon einen Umlaut traegt, hat jemand mit den richtigen
     # Zeichen geschrieben. Das uebrige ue/ae/oe darin ist dann echt.
     if re.search(r'[äöüß]', w):
         return False
-    if treffer.group(0) == 'ue' and ECHT_UE.search(klein):
-        return False
-    return True
+    # Spannen der echten Staemme merken - ein Paar INNERHALB eines Stammes
+    # ist echt, eines daneben nicht.
+    echt_spannen = []
+    for t in ECHT_TEIL:
+        pos = klein.find(t)
+        while pos != -1:
+            echt_spannen.append((pos, pos + len(t)))
+            pos = klein.find(t, pos + 1)
+    for treffer in PAAR.finditer(klein):
+        a, b = treffer.start(), treffer.end()
+        if any(s <= a and b <= e for s, e in echt_spannen):
+            continue
+        if treffer.group(0) == 'ue' and ECHT_UE.search(klein[max(0, a - 1):b]):
+            continue
+        return True
+    return False
+
+
+def ist_bezeichner(w):
+    """Ist das Wort ein Loxone-/MQTT-Name statt deutscher Text?
+
+    Merkmale aus den Hausregeln: durchgehende Grossschreibung (LAEUFT,
+    ITUEREN) oder der i-Vorsatz vor einem Grossbuchstabenwort (iLAEDT).
+    Beides kommt in Prosa nicht vor.
+    """
+    if len(w) >= 3 and w.isupper():
+        return True
+    if len(w) >= 4 and w[0] == 'i' and w[1:].isupper():
+        return True
+    return False
 
 
 def verdaechtig_ss(w):
@@ -149,9 +206,44 @@ def verdaechtig_ss(w):
     return 'ss' in klein and any(t in klein for t in SZ_STAMM)
 
 
+# Die vier Array-Schluessel, deren Wert in einer Loxone-Vorlage oder in der
+# Oberflaeche landet. Absichtlich kurz gehalten: jede weitere Zeichenkette
+# in PHP ist Kommentar, Protokoll oder Bezeichner und geht niemanden an.
+PHP_SCHLUESSEL = re.compile(
+    r"'(?:kurz|text|title|comment)'\s*=>\s*'((?:[^'\\]|\\.)*)'")
+
+
+def php_dateien(plugin):
+    """PHP-Dateien unter webfrontend/ - dort steht, was der Anwender sieht."""
+    wurzel = os.path.join(plugin, 'webfrontend')
+    for ordner, _, dateien in os.walk(wurzel):
+        for d in sorted(dateien):
+            if d.endswith('.php'):
+                voll = os.path.join(ordner, d)
+                yield voll, os.path.relpath(voll, plugin).replace(os.sep, '/')
+
+
+def woerter_pruefen(wert, treffer, fundstelle):
+    """Die Woerter eines Wertes durchgehen - gemeinsam fuer .ini und .php."""
+    for m in re.finditer(r'[A-Za-zÄÖÜäöüß]{3,}', wert):
+        w = m.group(0)
+        vor = wert[m.start() - 1:m.start()]
+        nach = wert[m.end():m.end() + 1]
+        if vor == '_' or nach == '_':
+            continue        # Teil von NAME_NAME
+        if verdaechtig(w) or verdaechtig_ss(w):
+            treffer.setdefault(w, []).append(fundstelle)
+
+
 def pruefen(plugin):
     """Liefert {wort: [fundstelle, ...]} fuer ein Plugin."""
     treffer = {}
+    for voll, rel in php_dateien(plugin):
+        text = io.open(voll, encoding='utf-8', errors='replace').read()
+        for nr, zeile in enumerate(text.split('\n'), 1):
+            for m in PHP_SCHLUESSEL.finditer(zeile):
+                woerter_pruefen(MARKE.sub(' ', MONO.sub(' ', m.group(1))),
+                                treffer, '%s:%d' % (rel, nr))
     for name in ('language_de.ini', 'help_de.ini'):
         pfad = os.path.join(plugin, 'templates', 'lang', name)
         if not os.path.isfile(pfad):
@@ -165,14 +257,7 @@ def pruefen(plugin):
             # Die Reihenfolge ist entscheidend: nach MARKE.sub waeren die
             # span-Grenzen fort und der Themenname stuende blank im Text.
             wert = MARKE.sub(' ', MONO.sub(' ', treff.group(1)))
-            for m in re.finditer(r'[A-Za-zÄÖÜäöüß]{3,}', wert):
-                w = m.group(0)
-                vor = wert[m.start() - 1:m.start()]
-                nach = wert[m.end():m.end() + 1]
-                if vor == '_' or nach == '_':
-                    continue        # Teil von NAME_NAME
-                if verdaechtig(w) or verdaechtig_ss(w):
-                    treffer.setdefault(w, []).append('%s:%d' % (name, nr))
+            woerter_pruefen(wert, treffer, '%s:%d' % (name, nr))
     return treffer
 
 
@@ -181,7 +266,8 @@ def main(argv):
     alle = '--alle' in argv[1:]
     if not ziele:
         ziele = sorted(d for d in os.listdir('.')
-                       if os.path.isdir(os.path.join(d, 'templates', 'lang')))
+                       if os.path.isdir(os.path.join(d, 'templates', 'lang'))
+                       or os.path.isdir(os.path.join(d, 'webfrontend')))
     if not ziele:
         print('[FEHL] kein Plugin mit templates/lang gefunden')
         return 1

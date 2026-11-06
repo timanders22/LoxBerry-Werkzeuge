@@ -31,7 +31,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='repla
 
 HIER = Path(__file__).resolve().parent
 B = HIER.parent
-PHP = r'C:\tmp\php-8.4.24-Win32-vs17-x64\php.exe'
+PHP = r'C:\tmp\php-8.4.27-Win32-vs17-x64\php.exe'
 PORT = 15987
 LB = HIER / 'lb_mqtt'
 VORLAUF_TEST = HIER / 'vorlauf_mqtt.php'
@@ -54,6 +54,12 @@ LINIEN = {
     'ferien':    ('LoxBerry-Plugin-FerienFeiertage', 'ferien.json',
                   'bin/cron.php', 'webfrontend/html/ferien.php',
                   'ferien', 'ferien', None),
+    # Spotpreis-Octopus, eingetragen 27.08.2026. Der Cron liegt unter bin/,
+    # der Endpunkt heisst index.php - beides anders als bei den vier
+    # darueber, aber die Fragen sind dieselben.
+    'octopus':   ('LoxBerry-Plugin-Spotpreis-Octopus', 'octopus.json',
+                  'bin/oc_cron.php', 'webfrontend/html/index.php',
+                  'octopus', 'octopus', None),
 }
 
 FLAGS = ('ann', 'audio', 'push', 'ptest')
@@ -192,7 +198,21 @@ def pruefe(kuerzel, sock):
     tmp = Path('C:/tmp') / tmpname
     tmp.mkdir(parents=True, exist_ok=True)
     (tmp / 'ptest').unlink(missing_ok=True)
-    for f in list(tmp.glob('mqtt_sig*')) + list(tmp.glob('mqtt_beat*')):
+    # sperre_* dazu (ergaenzt 27.08.2026, Anlass Octopus 1.1.0).
+    #
+    # Der Endpunkt jener Linie hat eine WIEDERHOLSPERRE: ?ptest=1 loest
+    # hoechstens alle zehn Sekunden aus, ?say alle zwanzig, ?refresh alle
+    # sechzig. Das ist richtig so - ein virtueller Ausgang, der in einer
+    # Schleife haengt, hat schon einmal 21 Anmeldeversuche gekostet.
+    #
+    # Fuer den Pruefstand heisst es: die Sperrdateien ueberleben den Lauf,
+    # und der NAECHSTE Lauf misst dann eine Sperre statt einer Wirkung.
+    # Gemessen: erster Lauf gruen, zweiter Lauf "meldet nicht sofort per
+    # MQTT" - ohne dass sich am Plugin etwas geaendert haette. Ein
+    # Pruefstand muss die Selbstheilung UND die Selbstbremse seines
+    # Pruflings kennen, sonst misst er sein eigenes Gedaechtnis.
+    for f in (list(tmp.glob('mqtt_sig*')) + list(tmp.glob('mqtt_beat*'))
+              + list(tmp.glob('sperre_*'))):
         f.unlink(missing_ok=True)
     ernten(sock)
 
@@ -255,7 +275,21 @@ def pruefe(kuerzel, sock):
     # Sauberer Ausgangspunkt: ptest weg, Signatur weg - dann meldet der Cron
     # in jedem Fall, und beide Wege beschreiben denselben Augenblick.
     (tmp / 'ptest').unlink(missing_ok=True)
-    for f in list(tmp.glob('mqtt_sig*')) + list(tmp.glob('mqtt_beat*')):
+    # sperre_* dazu (ergaenzt 27.08.2026, Anlass Octopus 1.1.0).
+    #
+    # Der Endpunkt jener Linie hat eine WIEDERHOLSPERRE: ?ptest=1 loest
+    # hoechstens alle zehn Sekunden aus, ?say alle zwanzig, ?refresh alle
+    # sechzig. Das ist richtig so - ein virtueller Ausgang, der in einer
+    # Schleife haengt, hat schon einmal 21 Anmeldeversuche gekostet.
+    #
+    # Fuer den Pruefstand heisst es: die Sperrdateien ueberleben den Lauf,
+    # und der NAECHSTE Lauf misst dann eine Sperre statt einer Wirkung.
+    # Gemessen: erster Lauf gruen, zweiter Lauf "meldet nicht sofort per
+    # MQTT" - ohne dass sich am Plugin etwas geaendert haette. Ein
+    # Pruefstand muss die Selbstheilung UND die Selbstbremse seines
+    # Pruflings kennen, sonst misst er sein eigenes Gedaechtnis.
+    for f in (list(tmp.glob('mqtt_sig*')) + list(tmp.glob('mqtt_beat*'))
+              + list(tmp.glob('sperre_*'))):
         f.unlink(missing_ok=True)
     ernten(sock)
     out, bef = lauf(ordner / endpunkt, kuerzel, ordner)
@@ -383,10 +417,25 @@ def pruefe_marstek(sock):
 
 
 if __name__ == '__main__':
-    namen = [a for a in sys.argv[1:] if a in LINIEN] or sorted(LINIEN)
+    # `or sorted(LINIEN)` stand hier bis zum 05.09.2026 und war die Falle:
+    # bei einem unbekannten Argument ist die gefilterte Liste LEER, das `or`
+    # schaltete auf ALLE bekannten Linien um, und am Ende stand
+    # 'ALLE PRUEFUNGEN BESTANDEN' - fuer fremde Plugins. Wer
+    # 'mqtt_vollstaendig_pruefen.py raumklima' aufrief, bekam damit einen
+    # gruenen Haken ueber eine Linie, die das Werkzeug gar nicht kennt.
+    # Ohne Argument bleibt es beim ganzen Bestand - das ist die
+    # eingefuehrte Aufrufform und misst wirklich alles, was auf der Liste
+    # steht.
     unbekannt = [a for a in sys.argv[1:] if a not in LINIEN]
     for u in unbekannt:
         print('unbekannte Linie: %s (bekannt: %s)' % (u, ', '.join(sorted(LINIEN))))
+    if unbekannt:
+        print('ABBRUCH: es wurde NICHTS gemessen. Wer eine Linie nennt, die\n'
+              '         hier nicht steht, bekommt kein Urteil ueber sie -\n'
+              '         auch kein gutes. Die Linie gehoert in LINIEN, oder\n'
+              '         die Luecke gehoert in die Freigabenotiz.')
+        sys.exit(2)
+    namen = [a for a in sys.argv[1:] if a in LINIEN] or sorted(LINIEN)
     vorlauf_schreiben()
     lb_aufbauen()
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

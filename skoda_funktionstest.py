@@ -14,9 +14,41 @@ sys.dont_write_bytecode = True
 import importlib.util, sys, types, os, json, re
 from pathlib import Path
 
-QUELLE = Path(sys.argv[1]) if len(sys.argv) > 1 else (
-    Path(__file__).resolve().parent.parent
-    / "LoxBerry-Plugin-SkodaConnect-0.9.0/LoxBerry-Plugin-SkodaConnect/bin/skoda.py")
+def skoda_quelle(argv):
+    """bin/skoda.py finden - aus dem Argument oder aus dem Arbeitsordner.
+
+    Angenommen werden drei Formen, weil im Bestand alle drei vorkommen:
+    der Pfad zur Datei, der Pluginordner, und gar nichts. Ohne Angabe wird
+    der Ordner mit der HOECHSTEN Fassungsnummer genommen - nicht der erste
+    alphabetisch, sonst gewaenne 0.9.9 gegen 0.9.13.
+    """
+    arbeit = Path(__file__).resolve().parent.parent
+    if len(argv) > 1:
+        p = Path(argv[1])
+        if p.is_dir():
+            p = p / "bin/skoda.py"
+        if not p.is_file():
+            raise SystemExit("ABBRUCH: %s gibt es nicht. Aufruf: %s "
+                             "[Pluginordner oder bin/skoda.py]"
+                             % (p, Path(__file__).name))
+        return p
+
+    def nummer(name):
+        m = re.search(r"(\d+)\.(\d+)\.(\d+)$", name)
+        return tuple(int(x) for x in m.groups()) if m else (0, 0, 0)
+
+    kandidaten = sorted((d for d in arbeit.iterdir()
+                         if d.is_dir()
+                         and d.name.startswith("LoxBerry-Plugin-Skoda")
+                         and (d / "bin/skoda.py").is_file()),
+                        key=lambda d: nummer(d.name))
+    if not kandidaten:
+        raise SystemExit("ABBRUCH: im Arbeitsordner steht kein Skoda-Plugin "
+                         "mit bin/skoda.py. Pfad bitte angeben.")
+    return kandidaten[-1] / "bin/skoda.py"
+
+
+QUELLE = skoda_quelle(sys.argv)
 spec = importlib.util.spec_from_file_location("skoda", QUELLE)
 sk = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sk)
@@ -177,7 +209,20 @@ pruefe("vin per Nummer 1", sk.vin_waehlen(vins, "1"), vins[0])
 pruefe("vin per Nummer 2", sk.vin_waehlen(vins, 2), vins[1])
 pruefe("vin per VIN", sk.vin_waehlen(vins, "tmbbbb000bb000002"), vins[1])
 pruefe("vin zu gross", sk.vin_waehlen(vins, "9"), None)
-pruefe("vin Muell -> 1", sk.vin_waehlen(vins, "quatsch"), vins[0])
+# BERICHTIGT 27.08.2026. Hier stand
+#     pruefe("vin Muell -> 1", sk.vin_waehlen(vins, "quatsch"), vins[0])
+# Die Erwartung war falsch, und sie hat den Fehler festgeschrieben, statt ihn
+# zu finden: eine Eingabe, die weder Nummer noch bekannte VIN ist, landete bei
+# Fahrzeug 1. Gemessen an einem Konto mit zwei Fahrzeugen startete eine fremde,
+# formal gueltige VIN damit die Klimatisierung im ERSTEN Auto - die
+# Musterpruefung des Endpunkts laesst jede 17-stellige VIN durch.
+#
+# Ein Pruefstand, der ein stilles Zurechtbiegen als Sollverhalten fuehrt, ist
+# schlimmer als keiner. Er hat achtzig andere Zeilen gruen gemeldet und diese
+# eine mit.
+pruefe("vin Muell -> abgewiesen", sk.vin_waehlen(vins, "quatsch"), None)
+pruefe("vin fremde VIN -> abgewiesen", sk.vin_waehlen(vins, "TMBJJ7NE9J0123456"), None)
+pruefe("vin leer -> abgewiesen", sk.vin_waehlen(vins, ""), None)
 pruefe("vin leere Liste", sk.vin_waehlen([], "1"), None)
 
 # --- kann() ---
@@ -201,6 +246,13 @@ class OSErr(Exception):
 pruefe("fehler ECONNREFUSED", "ECONNREFUSED" in sk.fehlertext(OSErr()), True)
 
 # --- config()-Grenzen ---
+# Den Ordner anlegen, statt ihn vorauszusetzen.
+#
+# Bis 0.9.13 verlangten die naechsten Zeilen ein vorhandenes /tmp/sktest und
+# zerbrachen sonst mitten im Lauf mit einem FileNotFoundError - nach achtzig
+# bestandenen Zeilen und ohne Schlusszahl. Ein Pruefstand, der an seiner
+# eigenen Umgebung scheitert, sieht aus wie ein Befund am Pruefling.
+Path("/tmp/sktest").mkdir(parents=True, exist_ok=True)
 sk.DATEI_CONFIG = Path("/tmp/sktest/leer.json")
 c = sk.config()
 pruefe("config Vorgabe Takt", c["intervall"], 300)
@@ -209,10 +261,43 @@ Path("/tmp/sktest/cfg.json").write_text(json.dumps(
      "takt_stamm": 0}))
 sk.DATEI_CONFIG = Path("/tmp/sktest/cfg.json")
 c = sk.config()
-pruefe("config Takt gekappt", c["intervall"], 60)
-pruefe("config Temperaturen getauscht", (c["temp_min"], c["temp_max"]), (17, 28))
-pruefe("config Verlauf gekappt", c["verlauf_tage"], 90)
-pruefe("config takt_stamm gekappt", c["takt_stamm"], 1)
+# BERICHTIGT 31.08.2026. Hier stand das KAPPEN als Soll:
+#
+#     intervall 5   -> 60      temp_min/max getauscht
+#     verlauf_tage 999 -> 90   takt_stamm 0 -> 1
+#
+# Gemessen hat der Prueflauf damit richtig, was der Dienst tut - und
+# festgeschrieben, dass er etwas anderes tut als die Oberflaeche. sk_regeln()
+# und sk_wert_pruefen() in webfrontend/html/sk_lib.php WEISEN denselben Wert
+# AB und nehmen die Vorgabe, mit einer ausgeschriebenen Begruendung:
+#
+#     "Es wird nichts gekappt und nichts zurechtgebogen. Beim Speichern ueber
+#      das Formular waere Kappen vertretbar, denn der Bediener sieht das
+#      Ergebnis sofort - bei einer Datei saehe niemand, dass aus 99999 eine
+#      3600 wurde."
+#
+# Beide lesen DIESELBE Datei. Bei "intervall": 5 zeigte die Oberflaeche
+# deshalb 300 und der Dienst fuhr 60, und kein Prueflauf verglich die beiden
+# Seiten. Das Soll ist die Fassung mit der Begruendung: abweisen, Vorgabe
+# nehmen. Diese Zeilen sind rot, bis config() nachgezogen ist - und das ist
+# der Zweck einer Eichung.
+pruefe("config intervall unzulaessig -> Vorgabe", c["intervall"], 300)
+pruefe("config temp vertauscht -> Vorgaben",
+       (c["temp_min"], c["temp_max"]), (16, 29))
+pruefe("config verlauf_tage unzulaessig -> Vorgabe", c["verlauf_tage"], 8)
+pruefe("config takt_stamm unzulaessig -> Vorgabe", c["takt_stamm"], 12)
+
+# Und die Gegenprobe, die bisher fehlte: ein GUELTIGER Wert muss ankommen.
+# Ohne sie waere "nimm immer die Vorgabe" eine bestandene Pruefung.
+Path("/tmp/sktest/gut.json").write_text(json.dumps(
+    {"intervall": 600, "temp_min": 18, "temp_max": 24, "verlauf_tage": 30,
+     "takt_stamm": 6}))
+sk.DATEI_CONFIG = Path("/tmp/sktest/gut.json")
+g = sk.config()
+pruefe("config gueltige Werte kommen an",
+       (g["intervall"], g["temp_min"], g["temp_max"], g["verlauf_tage"],
+        g["takt_stamm"]), (600, 18, 24, 30, 6))
+sk.DATEI_CONFIG = Path("/tmp/sktest/cfg.json")
 Path("/tmp/sktest/cfg.json").write_text('{ kaputt')
 c = sk.config()
 pruefe("config unlesbar -> Vorgaben", c["intervall"], 300)

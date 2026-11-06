@@ -19,6 +19,18 @@ Ohne diese Einengung meldet das Werkzeug 44 Fundstellen, von denen die
 meisten keine sind - und ein Werkzeug, das mehr Fehlmeldungen als Befunde
 gibt, wird nach dem dritten Mal nicht mehr gelesen.
 
+NUR PHP. Das Werkzeug liest ausschliesslich .php-Dateien, denn nur PHP
+haelt einen stat()-Zwischenspeicher. In Python liefert os.path.getsize()
+nach einem Anhaengen sofort die neue Groesse - gemessen am 03.09.2026:
+100 Byte, angehaengt, 1000 Byte. Eine Kappung in Python hat das Problem
+also nicht.
+
+DAHER GILT: "0 Kappung(en)" heisst "keine PHP-Kappung", NICHT "keine
+Kappung". Ultraschall 1.2.2 kappt sein Protokoll in bin/ultraschall.py
+(log_kappen); dieses Werkzeug meldet dort 0 und hat trotzdem recht. Wer aus
+der Null auf eine fehlende Kappung schliesst, misst das Werkzeug, nicht den
+Prueflaufling.
+
 Aufruf:  statzwischenspeicher_pruefen.py [ORDNER ...]
 """
 import re, sys, pathlib
@@ -28,6 +40,58 @@ KAPPT = re.compile(r'array_slice|file\s*\(|rename\s*\(|unlink\s*\(|ftruncate|'
                    r'file_put_contents\s*\([^,]+,\s*implode', re.I)
 # Woran ein Pruefstand erkannt wird - dort laeuft der Prozess einmal.
 PRUEFSTAND = re.compile(r'_test\.php$|/t_[^/]+\.php$|_probe\.php$')
+
+# NACHGESCHAERFT 04.09.2026 - der dritte Fehlalarm derselben Bauart.
+#
+# KAPPT allein zaehlt 'unlink(' und 'file(' in der Naehe eines filesize() mit.
+# Damit schlug das Werkzeug dreimal auf ARCHIVBEREINIGUNGEN an, die keine
+# Kappungen sind:
+#
+#   BYD-Autos    by_zugang_loeschen()  filesize() sagt, wie viele Nullen zu
+#                                      schreiben sind - einmal je Klick
+#   ACTiKamera   cam_cleanup()         summiert Byte und loescht die
+#                                      aeltesten Dateien
+#   Intercom     ic_aufraeumen()       dasselbe, nach Alter, Anzahl und Platz
+#
+# Allen dreien fehlt das Merkmal einer Kappung: Ein Kappungstor VERGLEICHT die
+# Groesse EINER Datei mit einer Schranke und kuerzt DIESE Datei. Die drei oben
+# lesen die Groesse fremder Dateien, um zu summieren oder zu melden - und die
+# gelesene Datei wird danach geloescht, nicht fortgeschrieben. Der
+# stat()-Zwischenspeicher kann dort nicht schaden: zwischen den zwei Lesungen
+# desselben Pfades schreibt niemand.
+#
+# Erkannt wird der Vergleich in zwei Formen:
+#   direkt    if (filesize($f) > 512000)        - auch mit @ und (int)
+#   indirekt  $n = filesize($f); if ($n > 100)  - Zuweisung, dann Vergleich
+#
+# GRENZE, ausdruecklich: eine Kappung, die die Schranke ueber zwei Funktionen
+# verteilt, findet dieses Werkzeug nicht. Lieber eine enge Pruefung, der man
+# glaubt, als eine breite, die nach dem dritten Fehlalarm niemand mehr liest.
+# Ein Vergleich gegen 0 ist KEINE Schranke, sondern die Frage "ist die Datei
+# leer?". Anlass 04.09.2026: BYD-Autos by_zugang_loeschen() ueberschreibt die
+# Zugangsdatei mit Nullen und loescht sie danach -
+#     $laenge = (int) @filesize($f);
+#     if ($laenge > 0) { @file_put_contents($f, str_repeat('0', $laenge)); }
+# Das ist eine Leerheitswache. Eine Kappung vergleicht gegen eine GROESSE.
+VERGLEICH_DIREKT = re.compile(
+    r'filesize\s*\([^;()]{0,120}?\)\s*\)?\s*(?:[<>]=?|[!=]==?)\s*(?!0\b)[\'"$\w(]')
+VERGLEICH_ZUWEISUNG = re.compile(r'(\$\w+)\s*=[^;=]{0,40}?filesize\s*\(')
+
+
+def vergleicht_groesse(text):
+    """Wird die gelesene Groesse mit einer SCHRANKE verglichen?
+
+    Nicht gezaehlt wird der Vergleich gegen 0 - der fragt, ob die Datei leer
+    ist, und steht in Loeschfunktionen.
+    """
+    if VERGLEICH_DIREKT.search(text):
+        return True
+    for var in set(VERGLEICH_ZUWEISUNG.findall(text)):
+        # dieselbe Variable spaeter in einem Vergleich, aber nicht gegen 0
+        if re.search(re.escape(var) + r'\s*(?:[<>]=?|[!=]==?)\s*(?!0\b)[\'"$\w(]',
+                     text):
+            return True
+    return False
 
 
 def bloecke(text):
@@ -62,6 +126,8 @@ def pruefe(datei):
             continue
         if not KAPPT.search(roh_anw):
             continue          # kein Kappungstor - nur eine Anzeige
+        if not vergleicht_groesse(roh_anw):
+            continue          # liest fremde Groessen, kappt aber nichts
         hat = 'clearstatcache' in roh_anw
         fund.append((name, start + 1, hat))
     return fund

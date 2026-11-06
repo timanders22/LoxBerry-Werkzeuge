@@ -36,8 +36,12 @@ sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 HIER = os.path.dirname(os.path.abspath(__file__))
 ARBEIT = os.path.dirname(HIER)
 
+# Der Knopfname darf ohne Kuerzel stehen ('sichern' statt 'ko_sichern'),
+# und 'laden' ist derselbe Knopf wie 'zurueck'. Bis zum 28.08.2026 verlangte
+# das Muster beides anders und uebersprang Kodi NG stillschweigend.
 ZWEIG = re.compile(
-    r"(?m)^if \((.*?) && isset\(\$_POST\['(\w+)_(sichern|zurueck)'\]\)\)")
+    r"(?m)^if \((.*?) && isset\(\$_POST\['(?:\w+_)?"
+    r"(sichern|zurueck|zurueckspielen|laden)'\]\)\)")
 
 
 def zuweisung(z, name, vor):
@@ -59,11 +63,17 @@ def pruefe(o):
     if not m:
         return None
     zeile = s[:m.start()].count('\n')
-    prae = m.group(2)
     mangel = []
 
     # ---- 1. die Wache ----
-    v = re.match(r'^\$(\w+)$', m.group(1).strip())
+    #
+    # Sie darf auch ein Funktionsaufruf sein - xx_ist_post(). Dann entfaellt
+    # dieser Punkt, und zwar zu Recht: der Fehler, gegen den er gebaut ist,
+    # ist eine VARIABLE, die es nicht gibt und die PHP still als false
+    # auswertet. Eine undefinierte Funktion ist dagegen ein fataler Fehler
+    # und damit laut. Die Punkte 2 bis 4 gelten weiter.
+    wache = m.group(1).strip()
+    v = re.match(r'^\$(\w+)$', wache)
     if v and zuweisung(z, v.group(1), zeile) is None:
         mangel.append('$%s nie zugewiesen' % v.group(1))
 

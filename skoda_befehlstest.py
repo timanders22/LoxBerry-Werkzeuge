@@ -11,11 +11,45 @@ import sys
 
 # Kein __pycache__ neben dem Plugin anlegen - es darf nicht ins Archiv.
 sys.dont_write_bytecode = True
-import importlib.util, asyncio, sys
+import importlib.util, asyncio, re, sys
 from pathlib import Path
-QUELLE = Path(sys.argv[1]) if len(sys.argv) > 1 else (
-    Path(__file__).resolve().parent.parent
-    / "LoxBerry-Plugin-SkodaConnect-0.9.0/LoxBerry-Plugin-SkodaConnect/bin/skoda.py")
+
+
+def skoda_quelle(argv):
+    """bin/skoda.py finden - aus dem Argument oder aus dem Arbeitsordner.
+
+    Angenommen werden drei Formen, weil im Bestand alle drei vorkommen:
+    der Pfad zur Datei, der Pluginordner, und gar nichts. Ohne Angabe wird
+    der Ordner mit der HOECHSTEN Fassungsnummer genommen - nicht der erste
+    alphabetisch, sonst gewaenne 0.9.9 gegen 0.9.13.
+    """
+    arbeit = Path(__file__).resolve().parent.parent
+    if len(argv) > 1:
+        p = Path(argv[1])
+        if p.is_dir():
+            p = p / "bin/skoda.py"
+        if not p.is_file():
+            raise SystemExit("ABBRUCH: %s gibt es nicht. Aufruf: %s "
+                             "[Pluginordner oder bin/skoda.py]"
+                             % (p, Path(__file__).name))
+        return p
+
+    def nummer(name):
+        m = re.search(r"(\d+)\.(\d+)\.(\d+)$", name)
+        return tuple(int(x) for x in m.groups()) if m else (0, 0, 0)
+
+    kandidaten = sorted((d for d in arbeit.iterdir()
+                         if d.is_dir()
+                         and d.name.startswith("LoxBerry-Plugin-Skoda")
+                         and (d / "bin/skoda.py").is_file()),
+                        key=lambda d: nummer(d.name))
+    if not kandidaten:
+        raise SystemExit("ABBRUCH: im Arbeitsordner steht kein Skoda-Plugin "
+                         "mit bin/skoda.py. Pfad bitte angeben.")
+    return kandidaten[-1] / "bin/skoda.py"
+
+
+QUELLE = skoda_quelle(sys.argv)
 spec = importlib.util.spec_from_file_location("skoda", QUELLE); sk = importlib.util.module_from_spec(spec); spec.loader.exec_module(sk)
 
 ok = fail = 0
@@ -52,9 +86,27 @@ async def lauf():
     pruefe("gesperrt: Grund genannt", "ausgeschaltet" in r[1], True)
     pruefe("gesperrt: nichts gesendet", a.spur, [])
 
-    # Abruf geht auch bei gesperrter Steuerung
+    # Abruf ist seit 0.9.15 MITGESPERRT.
+    #
+    # Hier stand bis dahin die Erwartung 1 - das Pruefstueck schrieb also
+    # genau die Uneinheitlichkeit fest, die 0.9.15 aufloest: der
+    # Miniserver-Endpunkt weist abruf seit 0.9.13 ab, der Dienst liess ihn
+    # durch, und der Reiter Test kam damit an der Sperre vorbei, waehrend im
+    # selben Bild stand, die Knoepfe gaeben eine Ablehnung zurueck.
     r = await sk.befehl_ausfuehren(a, VINS, CFG_AUS, {"aktion": "abruf"})
-    pruefe("abruf trotz Sperre", r[0], 1)
+    pruefe("abruf ist mitgesperrt", r[0], 0)
+    pruefe("abruf: Grund genannt", "ausgeschaltet" in r[1], True)
+
+    # Und die Gegenprobe: mit Freigabe geht er durch. Ohne sie misst die
+    # Zeile darueber nur, dass irgendetwas 0 zurueckgibt.
+    #
+    # Die Bremse wird vorher zurueckgesetzt. Sie ist ein Prozessfeld, und ein
+    # vorangegangener abruf im selben Lauf haette sie sonst gesetzt - dann
+    # maesse diese Zeile die Ratenbremse statt der Freigabe. Genau daran ist
+    # sie beim ersten Anlauf gescheitert.
+    sk._BREMSE.letzter_abruf = 0.0
+    r = await sk.befehl_ausfuehren(a, VINS, CFG, {"aktion": "abruf"})
+    pruefe("abruf mit Freigabe", r[0], 1)
 
     # Kein Fahrzeug bekannt
     r = await sk.befehl_ausfuehren(a, [], CFG, {"aktion": "klima_start", "temp": 21})

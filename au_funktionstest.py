@@ -20,6 +20,14 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True  # kein __pycache__ neben dem Plugin
 
+# Kein Netz - seit 11.09.2026. Ohne Sperre ging dieses Werkzeug 83 Mal nach
+# aussen, darunter zu identity.vwgroup.io: der Konstruktor weiter unten
+# meldete sich mit den Pruefdaten wirklich am Audi-/VW-Konto an. Einzelheiten
+# im Kopf von netzsperre.py.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import netzsperre                                                     # noqa: E402
+netzsperre.einschalten()
+
 QUELLE = Path(sys.argv[1]) if len(sys.argv) > 1 else (
     Path(__file__).resolve().parent.parent
     / "LoxBerry-Plugin-AudiConnect-0.9.0/LoxBerry-Plugin-AudiConnect/bin/audi.py")
@@ -274,9 +282,29 @@ pruefe("kennzahl unbekannt", au.kennzahl(None, au.VERRIEGELT), None)
 
 liste = [id4()]
 pruefe("Fahrzeugwahl per Nummer", au.fahrzeug_waehlen(liste, "1") is liste[0], True)
-pruefe("Fahrzeugwahl per VIN", au.fahrzeug_waehlen(liste, "wvwzzze1zpp000001") is liste[0], True)
+# BERICHTIGT 05.09.2026. Hier stand
+#     pruefe("Fahrzeugwahl per VIN",
+#            au.fahrzeug_waehlen(liste, "wvwzzze1zpp000001") is liste[0], True)
+# - eine VOLKSWAGEN-Nummer an einer Liste, deren einziges Fahrzeug die
+# Audi-Nummer WAUZZZ4M0PD000001 traegt. Die Zeile hiess "per VIN" und mass
+# das Gegenteil: sie war nur deshalb gruen, weil fahrzeug_waehlen() bei
+# JEDER unbekannten VIN auf Fahrzeug 1 zurueckfiel. Damit hat der
+# Pruefstand einen Fehler als richtiges Verhalten festgeschrieben - eine
+# vertippte VIN in einer Loxone-Ausgangsadresse entriegelte das falsche
+# Auto, und diese Zeile sagte dazu "bestanden".
+pruefe("Fahrzeugwahl per eigener VIN",
+       au.fahrzeug_waehlen(liste, "WAUZZZ4M0PD000001") is liste[0], True)
+pruefe("Fahrzeugwahl per eigener VIN, klein geschrieben",
+       au.fahrzeug_waehlen(liste, "wauzzz4m0pd000001") is liste[0], True)
+pruefe("Fahrzeugwahl bei FREMDER VIN ergibt nichts",
+       au.fahrzeug_waehlen(liste, "WVWZZZE1ZPP000001"), None)
+pruefe("Fahrzeugwahl bei um eine Ziffer vertippter VIN ergibt nichts",
+       au.fahrzeug_waehlen(liste, "WAUZZZ4M0PD000002"), None)
 pruefe("Fahrzeugwahl zu gross", au.fahrzeug_waehlen(liste, "5"), None)
 pruefe("Fahrzeugwahl leere Liste", au.fahrzeug_waehlen([], "1"), None)
+# Ohne Angabe bleibt es beim ersten Fahrzeug - das ist die dokumentierte
+# Vorgabe und darf sich NICHT mitgeaendert haben.
+pruefe("Fahrzeugwahl ohne Angabe", au.fahrzeug_waehlen(liste, "") is liste[0], True)
 
 # ---------------------------------------------------------------------------
 # Takt: die Bibliothek verlangt mindestens 180 s
@@ -335,6 +363,8 @@ pruefe("Connector meldet sich als audi", _acon.Connector.get_type(None),
 # Format aendert. Ohne Netz scheitert danach die Anmeldung; das ist erwartet
 # und beweist zugleich, dass die Konfiguration bis zur Anmeldung durchkam.
 # Ein ConfigurationError dagegen waere ein echter Befund.
+# "Ohne Netz" stimmt erst seit der Netzsperre oben (11.09.2026). Vorher ging
+# von hier eine echte Anmeldung an identity.vwgroup.io hinaus.
 try:
     CarConnectivity(config=au.bibliothek_config(
         {"email": "a@b.de", "passwort": "x", "spin": ""}, au.VORGABEN))
@@ -356,5 +386,6 @@ except Exception as err:                                              # noqa: BL
         pruefe("Bibliothek nimmt die Konfiguration an", art + ": " + str(err), "kein Fehler")
 
 print()
+print(netzsperre.bericht())
 print("%d bestanden, %d durchgefallen" % (OK, FAIL))
 sys.exit(1 if FAIL else 0)

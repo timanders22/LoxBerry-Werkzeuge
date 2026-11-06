@@ -1,0 +1,1 @@
+zigbee2mqtt zigbee2lox foshkplugin miniserverbackup-ng weather4lox

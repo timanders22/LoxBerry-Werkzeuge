@@ -53,12 +53,29 @@ if __name__ == '__main__':
             continue
         n = 0
         for f in sorted(d.rglob('language_*.ini')):
-            t = f.read_text(encoding='utf-8')
+            # BINAER lesen und schreiben. Bis zum 31.08.2026 stand hier
+            # read_text/write_text - und das kippte auf Windows JEDE
+            # LF-Datei auf CRLF: read_text uebersetzt beim Lesen alle
+            # Zeilenenden zu \n, write_text beim Schreiben
+            # zu \r\n.
+            #
+            # Gemessen an BYD-Autos language_de.ini: 42733 -> 43252 Byte,
+            # 519 Zeilen umgeschrieben, von denen dieses Werkzeug ZWEI
+            # anfassen wollte. Der Bestand fuehrt 140 von 146
+            # Sprachdateien als LF - der Schaden waere gross und lautlos
+            # gewesen, denn eine durchgehend gekippte Datei ist nicht
+            # 'gemischt' und faellt keiner Mischungspruefung auf.
+            #
+            # Binaer gelesen bleiben die Zeilenenden im Text stehen, und
+            # da umstellen() nur Entitaeten ersetzt, kommen sie
+            # unveraendert wieder heraus. Es braucht dafuer keine
+            # Stil-Erkennung - nur den Verzicht auf die Uebersetzung.
+            t = f.read_bytes().decode('utf-8')
             neu = umstellen(t)
             if neu != t:
                 n += sum(t.count(k) for k in ERSETZUNG)
                 if not trocken:
-                    f.write_text(neu, encoding='utf-8')
+                    f.write_bytes(neu.encode('utf-8'))
             # Was bleibt an Entitaeten uebrig?
             for m in set(re.findall(r'&#?\w+;', neu)):
                 if m not in BLEIBT:

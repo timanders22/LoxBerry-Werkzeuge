@@ -127,12 +127,19 @@ REGELN = [
     (r"^Heating_(Flow|Return)_OBIS_9\.4$",
      "zahl", "C", 1, -50, 200, True, "FELD.TEMPERATUR", "doku"),
 
+    # Gruppe 1 (2.8.11, Entwurf sm 2.3 a, E2): die drei Zustaende gehen -1 (retained) hinaus,
+    # wenn eine erfolgreiche Messung sie nicht mehr liefert (bis 2.8.10 "-"). Deshalb min -1
+    # und signed: sonst legte die Vorlage MinVal=0/Signed=false an, Loxone setzte -1 auf 0,
+    # und 0 ist hier ein gueltiger Zustand (Regeln/07 Abschnitt 5).
     (r"^Tarif_Indicator_Electricity_96\.14\.0$",
-     "zahl", "", 0, 0, 99, False, "FELD.TARIF", "doku"),
-    (r"^Breaker_State_Electricity_96\.1\.4$",
-     "zahl", "", 0, 0, 9, False, "FELD.SCHALTER", "doku"),
+     "zahl", "", 0, -1, 99, True, "FELD.TARIF", "doku"),
+    # 96.3.10, nicht 96.1.4: gelesen wird die Kennzahl 96.3.10, und
+    # 96.1.4 gehoert Version_Information_96.1.4. Bis 2.4.3 trugen beide
+    # Felder dieselbe Kennzahl im Namen.
+    (r"^Breaker_State_Electricity_96\.3\.10$",
+     "zahl", "", 0, -1, 9, True, "FELD.SCHALTER", "doku"),
     (r"^Message_Code_96\.13\.1$",
-     "zahl", "", 0, 0, 999999, False, "FELD.MELDECODE", "doku"),
+     "zahl", "", 0, -1, 999999, True, "FELD.MELDECODE", "doku"),
     (r"^Version_Information_96\.1\.4$",
      "zahl", "", 0, 0, 999999, False, "FELD.FASSUNG", "doku"),
     (r"^Equipment_Identifier_96\.1\.1$",
@@ -223,14 +230,62 @@ def obis_gegenpruefen(pfad):
     return OBIS
 
 
+# ======================================================================
+# einheit_vz - was vzlogger WIRKLICH durchreicht
+#
+# Auf dem klassischen Weg rechnet bin/sml_parser.php um (Wh->kWh, W->kW);
+# dort steht die Einheit in REGELN. vzlogger rechnet NICHT um - es reicht
+# den Wert des Zaehlers durch, und welche Einheit das ist, haengt am
+# Zaehler. Bis 2.7.2 war das nicht gemessen, und deshalb stand hier nichts.
+#
+# AM 07.09.2026 AM LAUFENDEN ZAEHLER GEMESSEN (SML, Zaehlernummer 0047,
+# ueber "fetch_vzlogger.pl --roh"):
+#
+#     1-0:1.8.0     11.088.277,7   ->  Wh   (11.088 kWh Bezug)
+#     1-0:2.8.0     20.409.178     ->  Wh
+#     1-0:16.7.0    514            ->  W
+#
+# In kWh waeren das 11 Millionen kWh, in kW 514 kW - beides fuer einen
+# Haushalt unmoeglich. Die Groessenordnung entscheidet hier eindeutig; ein
+# Datenblatt liegt nicht vor, und der Vorbehalt steht in der README.
+#
+# WAS HIER NICHT STEHT, BLEIBT LEER. Gemessen ist EIN Zaehler an EINER
+# Anlage. Ein anderer Zaehler kann eine andere Einheit senden - deshalb
+# wird von diesen drei Kanaelen nicht auf die uebrigen 61 Felder
+# geschlossen. Wer einen anderen Zaehler hat, misst mit --roh nach und
+# traegt hier ein.
+#
+# quelle sagt, woher die Angabe kommt:
+#   "zaehler" - an einem echten Zaehler gemessen
+#   "code"    - zwingend aus dem eigenen Code, siehe unten
+EINHEIT_VZ = {
+    "Consumption_Total_OBIS_1.8.0":            ("Wh", "zaehler"),
+    "Delivery_Total_OBIS_2.8.0":               ("Wh", "zaehler"),
+    "Total_Power_OBIS_16.7.0":                 ("W",  "zaehler"),
+    # Diese beiden sendet der Zaehler nicht - bin/fetch_vzlogger.pl bildet
+    # sie unmittelbar aus Total_Power_OBIS_16.7.0 (Vorzeichen positiv ist
+    # Bezug, negativ Einspeisung). Sie tragen deshalb zwingend DESSEN
+    # Einheit; das ist kein Schluss ueber den Zaehler, sondern eine
+    # Ablesung am eigenen Code.
+    "Consumption_CalculatedPower_OBIS_1.99.0": ("W",  "code"),
+    "Delivery_CalculatedPower_OBIS_2.99.0":    ("W",  "code"),
+}
+
+
 def metadaten(name):
     for muster, typ, einheit, nk, mn, mx, sg, bed, quelle in REGELN:
         if re.match(muster, name):
-            return {
-                "typ": typ, "einheit": einheit, "einheit_vz": "",
+            eh_vz, vz_quelle = EINHEIT_VZ.get(name, ("", ""))
+            md = {
+                "typ": typ, "einheit": einheit, "einheit_vz": eh_vz,
                 "nk": nk, "min": mn, "max": mx, "signed": sg,
                 "bed": bed, "quelle": quelle,
             }
+            # Woher die vz-Einheit kommt, gehoert daneben - sonst laesst
+            # sich spaeter nicht mehr unterscheiden, was gemessen war.
+            if vz_quelle:
+                md["quelle_vz"] = vz_quelle
+            return md
     return None
 
 

@@ -7,6 +7,11 @@ Ersatz und dessen Offenlegung: Klammer-, Tag- und <?php/?>-Bilanz zaehlen.
 Genau das tut dieses Skript, zusammen mit den uebrigen Punkten der
 Pflichtpruefung, die sich ohne PHP durchfuehren lassen.
 
+STAND (Nachzug 01.11.2026, an Weissware 0.9.45): bash -n im Skriptordner mit
+blossem Dateinamen (WSL-bash bekam Windows-Pfade), Sendethemen auch aus
+grund["geraet%s/..."] (auto_wartet/auto_grund, Gruppe 44), neue Zeile
+"Erzeuger schreibt beide language_*.ini byteweise gleich" (an einer Kopie).
+
 Aufruf:  ww_pruefen.py <pluginordner>
 """
 
@@ -46,6 +51,94 @@ def fehl(text):
 
 def hinw(text):
     HINWEISE.append(text)
+
+
+# ---------------------------------------------------------------------------
+# Abschriften gemeinsamer Dateien (Werkzeug-V1b, 08.10.2026; wie vw_pruefen.py)
+#
+# Seit dem Sprachmodul (Nr. 36) traegt die Linie eine Abschrift von
+# Werkzeuge/gemeinsam/sprachausgabe.php und den Abschnitt [ANSAGE] aus
+# gemeinsam/sprachausgabe_texte.json. Beides benutzt die Textfunktion des
+# Moduls (ansage_t), nicht die der Linie - die Sprachpruefung meldete deshalb
+# die Modulschluessel als "nie benutzt", dazu Schluessel aus dem Selbsttest
+# des Moduls (SEITE.L_AUDIO) und die Beispieladressen des Moduls als
+# Heimnetzadressen.
+#
+# Uebergangen wird NUR, was byte-gleich mit der Stammfassung ist - wie in
+# hausstandard_pruefen.py und tote_helfer.py. Eine aeltere oder veraenderte
+# Abschrift wird normal geprueft und bleibt ein Befund (die Abweichung selbst
+# meldet gemeinsam_pruefen.py in der Kette). Vom Abschnitt [ANSAGE] werden nur
+# die Schluessel uebergangen, deren Wert in DE und EN gleich dem der
+# Stammfassung ist - und nur, wenn die Linie sprachausgabe.php unveraendert
+# traegt.
+# ---------------------------------------------------------------------------
+def _stamm():
+    return Path(__file__).resolve().parent / "gemeinsam"
+
+
+def gemeinsame_abschriften(wurzel):
+    """Dateien der Linie, die byte-gleich mit einer Stammfassung unter
+    Werkzeuge/gemeinsam/ sind (wie hausstandard_pruefen.py)."""
+    stamm = _stamm()
+    aus = set()
+    if not stamm.is_dir():
+        return aus
+    vorlagen = {}
+    for s in stamm.iterdir():
+        if s.is_file():
+            vorlagen.setdefault(s.name, []).append(s.read_bytes())
+    for f in Path(wurzel).rglob("*"):
+        if f.is_file() and f.name in vorlagen:
+            try:
+                if f.read_bytes() in vorlagen[f.name]:
+                    aus.add(f.resolve())
+            except OSError:
+                pass
+    return aus
+
+
+def ansage_modulschluessel(wurzel, gem):
+    """'ANSAGE.<schluessel>' fuer jeden Modulschluessel, dessen Wert in
+    language_de.ini UND language_en.ini gleich dem der Stammfassung ist.
+    Leer, wenn die Linie sprachausgabe.php nicht unveraendert traegt."""
+    if not any(f.name == "sprachausgabe.php" for f in gem):
+        return set()
+    quelle = _stamm() / "sprachausgabe_texte.json"
+    if not quelle.is_file():
+        return set()
+    import json
+    soll = json.loads(quelle.read_bytes().decode("utf-8"))
+    ist = {}
+    for sprache in ("de", "en"):
+        p = wurzel / ("templates/lang/language_%s.ini" % sprache)
+        if not p.is_file():
+            return set()
+        ist[sprache], _ = ini_lesen(p)
+    aus = set()
+    for k, w in soll.get("de", {}).items():
+        voll = "ANSAGE." + k
+        if (ist["de"].get(voll) == w
+                and voll in ist["en"]
+                and ist["en"][voll] == soll.get("en", {}).get(k)):
+            aus.add(voll)
+    return aus
+
+
+def _ini_ohne_schluessel(t, frei):
+    """Text einer Sprachdatei, in dem die Zeilen der Schluessel aus `frei`
+    geleert sind (Zeilenzahl bleibt)."""
+    abschnitt = ""
+    aus = []
+    for zeile in t.split("\n"):
+        s = zeile.strip()
+        if s.startswith("[") and s.endswith("]"):
+            abschnitt = s[1:-1]
+        else:
+            m = re.match(r"^([A-Z0-9_]+)\s*=", s)
+            if m and abschnitt + "." + m.group(1) in frei:
+                zeile = ""
+        aus.append(zeile)
+    return "\n".join(aus)
 
 
 # ---------------------------------------------------------------------------
@@ -180,12 +273,39 @@ def pruefe_sprache(wurzel):
             fehl("language_%s.ini Zeile %d passt nicht auf SCHLUESSEL = \"…\": %s"
                  % (name, nr, zeile[:70]))
 
+
+    # Werkzeug-V1b: unveraenderte Abschriften gemeinsamer Dateien uebergehen.
+    gem = gemeinsame_abschriften(wurzel)
+    frei = ansage_modulschluessel(wurzel, gem)
+    for f in sorted(gem):
+        hinw("%s: unveraenderte Abschrift von Werkzeuge/gemeinsam/%s - in Sprach-, "
+             "Formular- und Anonymitaetspruefung uebergangen%s"
+             % (f.relative_to(wurzel.resolve()).as_posix(), f.name,
+                (", dazu %d Modulschluessel in [ANSAGE]" % len(frei))
+                if f.name == "sprachausgabe.php" else ""))
+    for f in sorted(wurzel.rglob("sprachausgabe.php")):
+        if f.resolve() not in gem:
+            hinw("%s weicht von Werkzeuge/gemeinsam/sprachausgabe.php ab - wird "
+                 "normal geprueft (gemeinsam_pruefen.py meldet die Abweichung)"
+                 % f.relative_to(wurzel).as_posix())
+
     benutzt = set()
     maskiert = set()
+    # Werkzeug-V2 (17.10.2026, Linie 0.9.42): Schluessel stehen auch in
+    # ww_t($x ? 'A' : 'B'), in Zuordnungen ('feld' => 'EINST.N_HC_ID') und in
+    # Tabellen (array(-1, 'TEST.A_KONFIG_LEER')). Das Muster ww_t('...')
+    # allein meldete 17 benutzte Schluessel als "nie benutzt". Gezaehlt wird
+    # jede Zeichenkette 'ABSCHNITT.SCHLUESSEL', deren Abschnitt die
+    # Sprachdatei kennt - ohne Praefixe zum Zusammensetzen ('EINST.L_' . $x).
+    abschnitte = {k.split(".", 1)[0] for k in tde}
     for f in sorted(wurzel.rglob("*.php")):
+        if f.resolve() in gem:
+            continue
         t = f.read_text(encoding="utf-8")
         benutzt |= set(re.findall(r"ww_t\('([A-Z0-9_]+\.[A-Z0-9_]+)'\)", t))
         benutzt |= set(re.findall(r"'(WW_[A-Z]+\.[A-Z0-9_]+|BAUSTEIN\.[A-Z0-9_]+)'", t))
+        benutzt |= {k for k in re.findall(r"'([A-Z][A-Z0-9_]*\.[A-Z0-9_]*[A-Z0-9])'", t)
+                    if k.split(".", 1)[0] in abschnitte}
         maskiert |= set(re.findall(r"ww_e\(\s*ww_t\('([A-Z0-9_]+\.[A-Z0-9_]+)'\)", t))
         maskiert |= set(re.findall(r"ww_e\(\s*sprintf\(\s*ww_t\('([A-Z0-9_]+\.[A-Z0-9_]+)'\)", t))
     benutzt |= {"EINST.DIENST_START", "EINST.DIENST_STOP", "EINST.DIENST_RESTART"}
@@ -196,7 +316,7 @@ def pruefe_sprache(wurzel):
         fehl("Schluessel im PHP benutzt, fehlt in language_de.ini: " + k)
     for k in sorted(benutzt - set(ten)):
         fehl("Schluessel im PHP benutzt, fehlt in language_en.ini: " + k)
-    for k in sorted(set(tde) - benutzt):
+    for k in sorted(set(tde) - frei - benutzt):
         fehl("Schluessel in language_de.ini, aber im PHP nie benutzt: " + k)
     if set(tde) != set(ten):
         fehl("language_de.ini und language_en.ini sind nicht deckungsgleich.")
@@ -223,10 +343,18 @@ def pruefe_oberflaeche(wurzel):
     p = wurzel / "webfrontend/htmlauth/index.php"
     t = p.read_text(encoding="utf-8")
 
+    # Werkzeug-V2 (17.10.2026): die Bereiche tragen den aktiven Reiter als
+    # PHP-Ausdruck in der Klasse (class="sm-seite<?= ... ?>"), und die
+    # Positivliste ist ein Array $ww_reiter_ids, gegen das in_array(..., true)
+    # vergleicht - nicht mehr ein Muster ^tab-(a|b). Beide Formen werden
+    # gelesen; vorher zaehlte das Werkzeug 0 Bereiche und eine leere Liste.
     ziele = re.findall(r'data-ziel="(tab-[a-z0-9]+)"', t)
-    seiten = re.findall(r'class="sm-seite" id="(tab-[a-z0-9]+)"', t)
+    seiten = re.findall(r'class="sm-seite[^"]*" id="(tab-[a-z0-9]+)"', t)
     liste = re.search(r"\^tab-\(([a-z0-9|]+)\)", t)
     liste = set("tab-" + x for x in liste.group(1).split("|")) if liste else set()
+    ids = re.search(r"\$ww_reiter_ids = array\(([^)]*)\)", t)
+    if ids:
+        liste |= set(re.findall(r"'(tab-[a-z0-9]+)'", ids.group(1)))
     if set(ziele) != set(seiten):
         fehl("Reiterleiste und Bereiche passen nicht zusammen: %s / %s"
              % (sorted(set(ziele)), sorted(set(seiten))))
@@ -239,7 +367,7 @@ def pruefe_oberflaeche(wurzel):
 
     # Legende in jedem Bereich mit Knopfreihe
     ohne = []
-    for m in re.finditer(r'<div class="sm-seite" id="(tab-[a-z0-9]+)"', t):
+    for m in re.finditer(r'<div class="sm-seite[^"]*" id="(tab-[a-z0-9]+)"', t):
         rest = t[m.start():]
         tiefe, pos = 0, 0
         for tok in re.finditer(r"</?div", rest):
@@ -256,7 +384,14 @@ def pruefe_oberflaeche(wurzel):
         print("[OK]   Jede Knopfreihe steht unter einer Legende")
 
     # Formulare
+    # Werkzeug-V1b: eine unveraenderte Abschrift gemeinsamer Dateien traegt
+    # eigene <form-Zeichenketten (Kommentar und Selbsttest des Sprachmoduls,
+    # gemessen an 1.0.2 und 1.1.0: fuenf Scheinbefunde) - kein Formular
+    # dieser Oberflaeche. Eine abweichende Abschrift wird weiter geprueft.
+    gem_formular = gemeinsame_abschriften(wurzel)
     for f in sorted(wurzel.rglob("*.php")):
+        if f.resolve() in gem_formular:
+            continue
         tt = f.read_text(encoding="utf-8")
         forms = re.findall(r"<form[^>]*>", tt)
         for form in forms:
@@ -369,9 +504,13 @@ def pruefe_vorlage(wurzel):
     if '"\\t"' not in b:
         fehl("Vor den Kindelementen der Loxone-Vorlage fehlt der Tabulator.")
     reihenfolge = re.findall(r"\$o \.= '([A-Za-z]+)=\"", b)
-    soll = ["Title", "Comment", "Address", "PollingTime", "Title", "Comment", "Check",
-            "Signed", "Analog", "SourceValLow", "DestValLow", "SourceValHigh",
-            "DestValHigh", "DefVal", "MinVal", "MaxVal"]
+    # Werkzeug-V2 (17.10.2026): HintText vorn und Unit/HintText hinten wie in
+    # der Form, die Loxone Config selbst speichert (Musterprojekt/vorlagen_w16,
+    # gegen die Projektdatei geprueft); die alte Liste kannte diese drei
+    # Attribute nicht.
+    soll = ["HintText", "Title", "Comment", "Address", "PollingTime", "Title", "Comment",
+            "Check", "Signed", "Analog", "SourceValLow", "DestValLow", "SourceValHigh",
+            "DestValHigh", "DefVal", "MinVal", "MaxVal", "Unit", "HintText"]
     if reihenfolge != soll:
         fehl("Attributreihenfolge der Loxone-Vorlage weicht vom Original ab:\n  %s"
              % reihenfolge)
@@ -382,12 +521,15 @@ def pruefe_vorlage(wurzel):
     # sie maskiert werden - sonst stuende 'l&auml;dt' in Loxone Config.
     if "html_entity_decode" not in t or "strip_tags" not in t:
         fehl("Die Vorlage loest vor dem Maskieren keine Entitaeten auf - in Loxone "
-             "Config stuende sonst wortwoertlich 'l&auml;dt'.")
+             "Config stuende sonst wortwoertlich 'lädt'.")
 
     # Nachbau der Ausgabe in Python und Pruefung als XML. Das ist ein Nachbau,
     # kein Durchlauf des PHP - es beweist nur, dass die erzeugte Form
     # wohlgeformt ist und die Zeilenenden stimmen.
-    felder = re.findall(r"^\s*'([A-Z]+)'\s*=>\s*array\('([^']*)',\s*'(WW_FELD\.[A-Z_]+)'\)",
+    # Werkzeug-V2 (17.10.2026): hinter dem Bedeutungsschluessel stehen
+    # inzwischen 'min', 'max', 'analog' und 'feld' - die Klammer schliesst
+    # nicht mehr direkt dahinter.
+    felder = re.findall(r"^\s*'([A-Z]+)'\s*=>\s*array\('([^']*)',\s*'(WW_FELD\.[A-Z_]+)'[,)]",
                         t, re.M)
     if len(felder) < 10:
         fehl("Nur %d Statusfelder ausgelesen - das Suchmuster passt nicht zur "
@@ -445,13 +587,20 @@ def pruefe_python(wurzel):
 
 def pruefe_shell(wurzel):
     skripte = sorted(list(wurzel.rglob("*.sh")) + [wurzel / "cron/cron.01min"])
+    vorher = len(FEHLER)
     for f in skripte:
         if not f.is_file():
             continue
-        e = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
+        # Nachzug 01.11.2026: unter Windows findet subprocess als "bash" zuerst
+        # System32\bash.exe (WSL); die bekam einen Windows-Pfad und meldete
+        # "No such file or directory" (cygpath-Befund aus Gruppe 45). Deshalb
+        # im Ordner des Skripts mit blossem Dateinamen - das versteht jede bash.
+        e = subprocess.run(["bash", "-n", f.name], cwd=str(f.parent),
+                           capture_output=True, text=True)
         if e.returncode:
             fehl("%s: %s" % (f.name, e.stderr.strip()))
-    print("[OK]   %d Shell-Skripte: bash -n fehlerfrei" % len(skripte))
+    if len(FEHLER) == vorher:
+        print("[OK]   %d Shell-Skripte: bash -n fehlerfrei" % len(skripte))
 
 
 # ---------------------------------------------------------------------------
@@ -485,13 +634,25 @@ def pruefe_rest(wurzel):
         print("[OK]   Nur gueltige Platzhalter, kein __pycache__, keine Sicherungsdateien")
 
     # Anonymitaet
+    #
+    # Werkzeug-V1b: die Beispieladressen einer unveraenderten Abschrift und der
+    # unveraenderten Modulschluessel in [ANSAGE] sind keine Heimnetzadressen
+    # dieser Linie. Die Namensliste (_eigene_woerter) gilt weiter fuer ALLE
+    # Dateien - ein Klarname waere auch in der Stammfassung ein Befund.
+    gem = gemeinsame_abschriften(wurzel)
+    frei = ansage_modulschluessel(wurzel, gem)
     verdacht = []
     for f in sorted(wurzel.rglob("*")):
         if not f.is_file() or f.suffix in (".png", ".ico"):
             continue
         t = f.read_text(encoding="utf-8", errors="replace")
+        t_adr = t
+        if f.resolve() in gem:
+            t_adr = ""
+        elif frei and f.suffix == ".ini" and f.parent.name == "lang":
+            t_adr = _ini_ohne_schluessel(t, frei)
         for m in re.finditer(r"\b(?:10|192\.168|172\.(?:1[6-9]|2[0-9]|3[01]))"
-                             r"(?:\.\d{1,3}){2,3}\b(?!\.)", t):
+                             r"(?:\.\d{1,3}){2,3}\b(?!\.)", t_adr):
             verdacht.append("%s: %s" % (f.name, m.group(0)))
         # Wortgrenzen, sonst schlaegt "Anwesenheitsmelder" auf den Namen der
         # Projektdatei an - genau das ist am 05.08.2026 passiert.
@@ -578,14 +739,20 @@ def pruefe_zusammenspiel(wurzel):
     py_block = re.search(r"VORGABEN = \{(.*?)\n\}", py, re.S).group(1)
     lib_block = re.search(r"function ww_vorgaben.*?\n}", lib, re.S).group(0)
     pv = dict(re.findall(r'^\s*"([a-z_]+)":\s*([0-9]+|"[a-z]+"),', py_block, re.M))
-    lv = dict(re.findall(r"^\s*'([a-z_]+)'\s*=>\s*([0-9]+|'[a-z]+'),", lib_block, re.M))
+    # Werkzeug-V2 (17.10.2026): nur die oberste Ebene von ww_vorgaben() (acht
+    # Leerzeichen) - die Unterschluessel von 'tts' (mode, port, volume, lang)
+    # sind keine Vorgabewerte des Dienstes. Die Ansage-Haken liest nur die
+    # PHP-Seite (ww_ansage_check() in ww_lib.php, per Cron ueber
+    # bin/ansage.php), der Dienst nicht.
+    lv = dict(re.findall(r"^ {8}'([a-z_]+)'\s*=>\s*([0-9]+|'[a-z]+'),", lib_block, re.M))
     for k in set(pv) & set(lv):
         a = pv[k].strip('"')
         b = lv[k].strip("'")
         if a != b:
             fehl("Vorgabewert %s: weissware.py sagt %s, ww_lib.php sagt %s" % (k, a, b))
     nur_py = set(pv) - set(lv)
-    nur_php = set(lv) - set(pv) - {"aktionstoken", "wartezeit"}
+    nur_php = set(lv) - set(pv) - {"aktionstoken", "wartezeit", "ansage_ein",
+                                   "ansage_stoerung", "ansage_fernstart"}
     if nur_py:
         fehl("Vorgabewerte nur in weissware.py: %s" % sorted(nur_py))
     if nur_php:
@@ -617,6 +784,11 @@ def pruefe_zusammenspiel(wurzel):
                               re.search(r"MQTT_FELDER = \((.*?)\)", py, re.S).group(1), re.M))
     gesendet |= set(re.findall(r'"([a-z_]+)"',
                                re.search(r"MQTT_FELDER = \((.*?)\)", py, re.S).group(1)))
+    # Nachzug 01.11.2026 (Gruppe 44, Weissware 0.9.44): auto_wartet/auto_grund
+    # gehen nicht ueber MQTT_FELDER, sondern je Geraet ueber das Lebenszeichen-
+    # Verzeichnis: grund["geraet%s/auto_wartet" % nummer] = ...
+    # nur echte Zuweisungen am Zeilenanfang, keine auskommentierten Zeilen
+    gesendet |= set(re.findall(r'^\s*grund\["geraet%s/([a-z_]+)" % nummer\]\s*=', py, re.M))
     fehlt = mq - gesendet
     if fehlt:
         fehl("Der MQTT-Reiter nennt Themen, die der Dienst nicht sendet: %s" % sorted(fehlt))
@@ -662,9 +834,128 @@ def pruefe_bausteinnamen(wurzel):
     if fehlend:
         fehl("Baustein-Liste nennt virtuelle Eingaenge, die es nicht gibt: "
              + ", ".join(fehlend))
-    else:
+    elif namen:
         print("[OK]   Alle %d virtuellen Eingaenge der Baustein-Liste gibt es auch"
               % len(namen))
+    _bausteinzeilen(wurzel, lib, bisher=len(namen))
+
+
+def _ww_titel_namen(lib):
+    """Die festen deutschen Namen aus ww_titel() (\\u{..} aufgeloest)."""
+    block = re.search(r"function ww_titel\(.*?\n\}", lib, re.S)
+    if not block:
+        return {}
+    namen = dict(re.findall(r"'([A-Z_]+)' => '([^']*)'", block.group(0)))
+    for k, w in re.findall(r"""'([A-Z_]+)' => "([^"]*)\"""", block.group(0)):
+        namen[k] = re.sub(r"\\u\{([0-9a-fA-F]+)\}", lambda m: chr(int(m.group(1), 16)), w)
+    return namen
+
+
+def _bausteinzeilen(wurzel, lib, bisher=0):
+    """Werkzeug-V2 (17.10.2026, Linie 0.9.42): die Baustein-Liste steht als
+    Tabellenzeilen Zn_mm = "Typ (Vorlage „X“) | Titel | ...". Seit Welle
+    Bild 16 kommen die Titel fest deutsch aus ww_titel() (auch bei englischer
+    Oberflaeche), mit den Impulsbefehlen CMD_START/CMD_STOP und der Vorlage
+    "Weissware Dienst" (D_*). Geprueft wird in DE und EN: jede Zeile, die eine
+    Vorlage nennt, nennt einen Titel, den genau diese Vorlage anlegt - und
+    jeder Schluessel, den eine Vorlage benutzt, hat einen Namen in ww_titel().
+    Das alte Muster N01 = "WW_1_FELD" gibt es in der Linie nicht mehr; das
+    Werkzeug meldete deshalb "0 virtuelle Eingaenge" als OK.
+    """
+    namen = _ww_titel_namen(lib)
+    if not namen:
+        fehl("ww_titel() bzw. ihre Namensliste nicht gefunden.")
+        return
+
+    def block(fn):
+        m = re.search(r"function %s\(.*?\n\}" % fn, lib, re.S)
+        return m.group(0) if m else ""
+
+    vorlagen = {
+        "Weissware N Status": [("N", k) for k in
+                               re.findall(r"^\s*'([A-Z]+)'\s*=>", block("ww_status_felder"), re.M)],
+        "Weissware N Verbrauch": [("N", "VOK" if k == "OK" else k) for k in
+                                  re.findall(r"^\s*'([A-Z]+)'\s*=>", block("ww_verbrauch_felder"), re.M)],
+        "Weissware N Befehle": [("" if n == "0" else "N", k) for n, k in
+                                re.findall(r"ww_titel\((\$nummer|0), '([A-Z_]+)'\)",
+                                           block("ww_vorlage_ausgang"))],
+        "Weissware Dienst": [("", k) for k in
+                             re.findall(r"'titel' => '([A-Z_]+)'", block("ww_dienst_felder"))],
+    }
+    titel = {}
+    for v, eintraege in vorlagen.items():
+        if not eintraege:
+            fehl("Vorlage %s: keine Befehle aus ww_lib.php gelesen - das Suchmuster passt nicht." % v)
+        for n, k in eintraege:
+            if k not in namen:
+                fehl("ww_titel() kennt keinen Namen fuer %s (Vorlage %s) - der Baustein hiesse %r"
+                     % (k, v, k))
+                continue
+            titel.setdefault(v, set()).add(("WW N " if n else "WW ") + namen[k])
+    for pflicht in ("CMD_START", "CMD_STOP"):
+        if ("N", pflicht) not in vorlagen["Weissware N Befehle"]:
+            fehl("Die Befehlsvorlage legt %s nicht an." % pflicht)
+
+    zeilen = 0
+    for sprache in ("de", "en"):
+        t = (wurzel / ("templates/lang/language_%s.ini" % sprache)).read_text(encoding="utf-8")
+        for schl, wert in re.findall(r'^(Z\d+_\d+) = "(.*)"$', t, re.M):
+            spalten = [s.strip() for s in wert.split("|")]
+            m = re.search(r"\((?:Vorlage|template) [„“\"](.+?)[“”\"]\)", spalten[0])
+            # Vorlagen anderer Plugins (z. B. "Spotpreis aWATTar" auf der Seite
+            # PV-Start) prueft dieses Werkzeug nicht.
+            if not m or len(spalten) < 2 or not m.group(1).startswith("Weissware"):
+                continue
+            zeilen += 1
+            vorlage = re.sub(r"^Weissware \d+ ", "Weissware N ", m.group(1))
+            name = re.sub(r"^WW \d+ ", "WW N ", spalten[1])
+            if vorlage not in titel:
+                fehl("language_%s.ini %s: Vorlage %r legt das Plugin nicht an"
+                     % (sprache, schl, m.group(1)))
+            elif name not in titel[vorlage]:
+                fehl("language_%s.ini %s: %r steht nicht in der Vorlage %r (ww_titel())"
+                     % (sprache, schl, spalten[1], m.group(1)))
+    if not zeilen and not bisher:
+        fehl("Baustein-Liste: keine Zeile mit Vorlage gefunden - das Suchmuster passt nicht.")
+    elif zeilen:
+        print("[OK]   %d Zeilen der Baustein-Liste (DE+EN) nennen Titel aus ww_titel(), "
+              "jeweils in ihrer Vorlage (%s)"
+              % (zeilen, ", ".join("%s %d" % (v, len(s)) for v, s in sorted(titel.items()))))
+
+
+def pruefe_erzeuger(wurzel):
+    """Nachzug 01.11.2026: erzeugt Werkzeuge/ww_sprache_erzeugen.py die beiden
+    language_*.ini dieses Ordners byteweise gleich? Gefahren wird an einer
+    Kopie in einem Zeitordner (der Ordner selbst bleibt unberuehrt). Weicht
+    sie ab, braechte ein Neubau einen Rueckschritt oder eine Umsortierung -
+    dann ist der Erzeuger hinter der ausgelieferten Datei (die .ini gilt)."""
+    import os
+    import shutil
+    import tempfile
+    erzeuger = Path(__file__).resolve().parent / "ww_sprache_erzeugen.py"
+    if not erzeuger.is_file():
+        hinw("Erzeugerprobe entfaellt: Werkzeuge/ww_sprache_erzeugen.py fehlt.")
+        return
+    with tempfile.TemporaryDirectory(prefix="ww_pruefen_") as tmp:
+        kopie = Path(tmp) / wurzel.name
+        shutil.copytree(str(wurzel), str(kopie))
+        e = subprocess.run([sys.executable, str(erzeuger), str(kopie)],
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace",
+                           env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        if e.returncode:
+            letzte = (e.stdout + e.stderr).strip().splitlines()[-3:]
+            fehl("Erzeuger ww_sprache_erzeugen.py weist ab (rc %d): %s"
+                 % (e.returncode, " | ".join(letzte)))
+            return
+        anders = [n for n in ("language_de.ini", "language_en.ini")
+                  if (kopie / "templates/lang" / n).read_bytes()
+                  != (wurzel / "templates/lang" / n).read_bytes()]
+    if anders:
+        fehl("Erzeuger ww_sprache_erzeugen.py schreibt nicht byteweise gleich: %s"
+             % ", ".join(anders))
+    else:
+        print("[OK]   Erzeuger ww_sprache_erzeugen.py schreibt beide language_*.ini byteweise gleich")
 
 
 def main():
@@ -681,6 +972,7 @@ def main():
     pruefe_shell(wurzel)
     pruefe_zusammenspiel(wurzel)
     pruefe_rest(wurzel)
+    pruefe_erzeuger(wurzel)
     print("-" * 72)
     for h in HINWEISE:
         print("[INFO]", h)

@@ -31,7 +31,7 @@ HIER = Path(__file__).resolve().parent
 LB = HIER / "lb"
 VORLAUF = HIER / "vorlauf.php"
 PHPS = [("7.4", r"C:\tmp\php-7.4.33-Win32-vc15-x64\php.exe"),
-        ("8.4", r"C:\tmp\php-8.4.24-Win32-vs17-x64\php.exe")]
+        ("8.4", r"C:\tmp\php-8.4.27-Win32-vs17-x64\php.exe")]
 
 # Das Pruefstueck ruft die Selbstpruefung auf und gibt GENAU die Zeile aus, um
 # die es geht - Stand und Antwort, durch | getrennt. Keine Oberflaeche, kein

@@ -14,9 +14,16 @@ Rein lesend. Zwei Pruefungen je Plugin:
 Aufruf:  python3 sprachschluessel_pruefen.py <Pluginordner> [...]
 Rueckgabewert 1, wenn etwas fehlt - fuer die Pruefkette.
 
-Die Sprachfunktion wird am haeufigsten benutzten Muster erkannt
-(xx_t, laengere wie abfahrt_t oder marstek_t eingeschlossen); Gardenas
-gt()-Kurzform wird eigens mitgeprueft.
+ALLE Sprachhelfer werden geprueft, nicht nur der haeufigste (berichtigt am
+04.09.2026). Bis dahin waehlte das Werkzeug mit max(..., key=count) genau
+EINEN Helfer; ein zweiter wie xx_te() - uebersetzen UND maskieren - war
+unsichtbar. Bei Midea2Lox 4.5.0 meldete es 31 fehlende Schluessel, wirklich
+fehlten 60; in 4.4.0 waren 107 Schluessel nie angesehen worden.
+
+Als Sprachhelfer gilt, wer auf _t oder _te endet (oder gt heisst) UND
+mindestens einmal mit einem Schluessel in Abschnitt.NAME-Form aufgerufen
+wird. Die zweite Bedingung haelt Funktionen heraus, die nur zufaellig so
+heissen.
 """
 import re
 import sys
@@ -52,10 +59,15 @@ def pruefe(p):
         code += f.read_text(encoding='utf-8', errors='replace')
     for f in p.glob('bin/*.php'):
         code += f.read_text(encoding='utf-8', errors='replace')
-    fns = re.findall(r"\b([a-z][a-z0-9_]{0,12}_t|gt)\(\s*['\"]", code)
+    # ALLE Helfer, nicht nur der haeufigste - und _te gehoert dazu.
+    kandidaten = sorted(set(re.findall(
+        r"\b([a-z][a-z0-9_]{0,12}_te?|gt)\(\s*['\"]", code)))
+    # Nur, wer wirklich mit einem Schluessel aufgerufen wird. Ohne diese
+    # Bedingung wuerde jede Funktion mitgezaehlt, die zufaellig auf _t endet.
+    fns = [f for f in kandidaten
+           if re.search(re.escape(f) + r"\(\s*'[A-Z0-9_]+\.[A-Za-z0-9_]+'", code)]
     if not fns:
         return ['keine Sprachfunktion gefunden - von Hand ansehen']
-    fn = max(set(fns), key=fns.count)
     de = schluessel_aus(p / 'templates/lang/language_de.ini')
     en = schluessel_aus(p / 'templates/lang/language_en.ini')
     aus = []
@@ -65,16 +77,22 @@ def pruefe(p):
         aus.append('language_en.ini fehlt')
         en = set()
 
-    # 1. statisch
-    statisch = set(re.findall(re.escape(fn) + r"\(\s*'([A-Z0-9_]+\.[A-Za-z0-9_]+)'\s*\)", code))
+    # 1. statisch - ueber JEDEN Helfer
+    statisch = set()
+    for fn in fns:
+        statisch |= set(re.findall(
+            re.escape(fn) + r"\(\s*'([A-Z0-9_]+\.[A-Za-z0-9_]+)'\s*\)", code))
     for k in sorted(statisch - de):
         aus.append('fehlt in DE: ' + k)
     for k in sorted(statisch - en):
         aus.append('fehlt in EN: ' + k)
 
-    # 2. dynamische Familien: xx_t('SEC.PREFIX' . irgendwas)
-    for praefix in sorted(set(re.findall(
-            re.escape(fn) + r"\(\s*'([A-Z0-9_]+\.[A-Za-z0-9_]*?)'\s*\.", code))):
+    # 2. dynamische Familien: xx_t('SEC.PREFIX' . irgendwas) - ueber JEDEN Helfer
+    praefixe = set()
+    for fn in fns:
+        praefixe |= set(re.findall(
+            re.escape(fn) + r"\(\s*'([A-Z0-9_]+\.[A-Za-z0-9_]*?)'\s*\.", code))
+    for praefix in sorted(praefixe):
         treffer_de = [k for k in de if k.startswith(praefix)]
         treffer_en = [k for k in en if k.startswith(praefix)]
         if not treffer_de:

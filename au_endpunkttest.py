@@ -18,23 +18,68 @@ Aufruf:  au_endpunkttest.py [pluginordner]
 import json
 import os
 import subprocess
+import re
 import sys
 import time
 from pathlib import Path
 
 HIER = Path(__file__).resolve().parent
 LB = HIER / "lb"
+# ERGAENZT 18.10.2026: AU_LB lenkt auf eine eigene Kopie der Attrappe um. Dieses
+# Werkzeug schreibt config/plugins/audiconnect/audi.json und loxone.json - in
+# der gemeinsamen Attrappe stoert das eine laufende Pruefkette (Marstek, 15:20).
+# Ohne AU_LB nur unter .kette_sperre laufen lassen.
+if os.environ.get("AU_LB"):
+    LB = Path(os.environ["AU_LB"])
 # vorlauf_getpost.php statt vorlauf.php: PHP fuellt unter der Kommandozeile
 # $_GET NICHT aus QUERY_STRING. Ohne diesen Vorlauf sieht der Endpunkt keinen
 # einzigen Parameter, antwortet folgerichtig mit GRUND=TOKEN - und ein
 # Prueflauf, der das nicht bemerkt, misst den Pruefstand statt des Endpunkts.
 VORLAUF = HIER / "vorlauf_getpost.php"
 PHPS = [("7.4", r"C:\tmp\php-7.4.33-Win32-vc15-x64\php.exe"),
-        ("8.4", r"C:\tmp\php-8.4.24-Win32-vs17-x64\php.exe")]
+        ("8.4", r"C:\tmp\php-8.4.27-Win32-vs17-x64\php.exe")]
 
-PLUGIN = Path(sys.argv[1]) if len(sys.argv) > 1 else (
-    HIER.parent / "LoxBerry-Plugin-AudiConnect-0.9.8")
-ORDNER = "audiconnect"
+def neuester_ordner(arbeit, praefix):
+    """Der Pluginordner mit der HOECHSTEN Fassungsnummer.
+
+    BERICHTIGT 31.08.2026. Die Vorgabe zeigte auf "LoxBerry-Plugin-AudiConnect-
+    0.9.8" - den Ordner gibt es seit der 0.9.10 nicht mehr, und der Lauf endete
+    mit einem FileNotFoundError auf au_lib.php statt mit einer Auskunft. Nach
+    Fassungszahlen sortiert, nicht alphabetisch: sonst gewaenne 0.9.9 gegen
+    0.9.10.
+    """
+    def nummer(name):
+        m = re.search(r"(\d+)\.(\d+)\.(\d+)$", name)
+        return tuple(int(x) for x in m.groups()) if m else (0, 0, 0)
+    k = sorted((d for d in arbeit.iterdir()
+                if d.is_dir() and d.name.startswith(praefix)
+                and (d / "plugin.cfg").is_file()), key=lambda d: nummer(d.name))
+    if not k:
+        raise SystemExit("ABBRUCH: kein Ordner %s* im Arbeitsordner." % praefix)
+    return k[-1]
+
+
+PLUGIN = (Path(sys.argv[1]) if len(sys.argv) > 1
+          else neuester_ordner(HIER.parent, "LoxBerry-Plugin-AudiConnect-"))
+# BERICHTIGT 31.08.2026: hier stand ORDNER = "audiconnect" fest. Solange das
+# Werkzeug nur gegen AudiConnect laeuft, faellt das nicht auf - au_reitertest.py
+# trug denselben festen Wert und wurde gegen Skoda-Connect-NG gerichtet. Es
+# schob damit AudiConnects Abbild unter die fremde Oberflaeche und meldete
+# 10 von 10 Laeufen rot. Der Befund war echt, die Messung nicht.
+def ordner_aus_plugincfg(plugin):
+    """FOLDER aus der plugin.cfg - der Name, unter dem LoxBerry die Ordner
+    anlegt und unter dem die Attrappe bestueckt ist."""
+    import re
+    cfg = plugin / "plugin.cfg"
+    if cfg.is_file():
+        m = re.search(r"^\s*FOLDER\s*=\s*(\S+)\s*$",
+                      cfg.read_text(encoding="utf-8", errors="replace"), re.M)
+        if m:
+            return m.group(1).lower()
+    return plugin.name.lower()
+
+
+ORDNER = ordner_aus_plugincfg(PLUGIN)
 
 OK = FAIL = 0
 
@@ -153,7 +198,23 @@ def ruf(php, woher="192.168.1.99", **parameter):
 # Bibliothek dorthin gespiegelt, wo eine Installation sie haette.
 ZIEL = LB / "webfrontend/html/plugins" / ORDNER
 ZIEL.mkdir(parents=True, exist_ok=True)
-for name in ("au_lib.php", "index.php"):
+# ERGAENZT 18.10.2026: seit 0.9.25 bindet au_lib.php die gemeinsame
+# sprachausgabe.php ein (require_once). Ohne sie endete jeder Aufruf mit FATAL,
+# die Antwort war leer, und der Lauf brach bei "position" mit IndexError ab.
+# Fehlt sie im Plugin, obwohl au_lib.php sie verlangt, wird das gesagt: eine
+# Abschrift vom vorigen Lauf laege sonst noch in der Attrappe und machte den
+# Lauf gruen (gemessen 18.10.2026 an einer Kopie ohne die Datei).
+_spiegel = ["au_lib.php", "index.php"]
+if "sprachausgabe.php" in (PLUGIN / "webfrontend/html/au_lib.php").read_text(
+        encoding="utf-8", errors="replace"):
+    if not (PLUGIN / "webfrontend/html/sprachausgabe.php").is_file():
+        print("  [FEHL] au_lib.php bindet sprachausgabe.php ein, die Datei fehlt "
+              "in webfrontend/html/ - der Endpunkt endet am Geraet mit FATAL.")
+        print()
+        print("0 bestanden, 1 durchgefallen")
+        sys.exit(1)
+    _spiegel.append("sprachausgabe.php")
+for name in _spiegel:
     (ZIEL / name).write_bytes((PLUGIN / "webfrontend/html" / name).read_bytes())
 LANG = LB / "templates/plugins" / ORDNER / "lang"
 LANG.mkdir(parents=True, exist_ok=True)
@@ -226,7 +287,9 @@ for fassung, php in PHPS:
 
     aus, bef = ruf(php, token=TOKEN_LESEN, aktion="position", fahrzeug="1")
     pruefe("position: keine PHP-Befunde", bef, [])
-    zeilen = aus.strip().splitlines()
+    # Leere Antwort ist ein FEHL, kein IndexError (18.10.2026: so brach der
+    # Lauf ab, als sprachausgabe.php in der Attrappe fehlte).
+    zeilen = (aus.strip().splitlines() + ["", ""])[:2]
     enthaelt("position: Breite", zeilen[0], ";BREITE=48.137154")
     enthaelt("position: Art", zeilen[0], ";POSART=1")
     pruefe("position: zweite Zeile ist die Anschrift",
@@ -338,17 +401,29 @@ for fassung, php in PHPS:
     aus, bef = ruf(php, token=TOKEN_LESEN, aktion="status", fahrzeug="1")
     pruefe("Stoerung: keine PHP-Befunde", bef, [])
     z = aus.strip()
-    enthaelt("Stoerung: OK=0", z, "AUDI;OK=0;")
+    # BERICHTIGT 18.10.2026: seit 0.9.22 (C6/U14, Entscheidung 4) setzt ein
+    # einzelner misslungener Abruf OK NICHT auf 0 - das Abbild ist 30 s alt und
+    # gilt noch, GRUND nennt die Stoerung. OK=0 kommt erst mit dem Alter (unten).
+    enthaelt("Stoerung: OK=1 bei frischem Abbild", z, "AUDI;OK=1;")
     enthaelt("Stoerung: Klasse 3 statt 9", z, ";GRUND=3;")
     enthaelt("Stoerung: Klartext dabei", z, "FEHLERTEXT=Audi hat wegen zu vieler")
     pruefe("Stoerungstext enthaelt kein Semikolon",
-           z.split("FEHLERTEXT=")[1].count(";"), 0)
+           (z.split("FEHLERTEXT=") + [""])[1].count(";"), 0)
     # Die alten Werte bleiben stehen - Loxone behaelt sie ohnehin.
     enthaelt("Stoerung: letzter Ladezustand bleibt", z, ";SOC=62")
 
+    # Abbild aelter als das Dreifache des Takts (Takt mindestens 180 s), der
+    # letzte Abruf gelang: OK=0 und GRUND=10 ("laeuft der Dienst?").
+    zwischenspeicher(alter=100000)
+    aus, bef = ruf(php, token=TOKEN_LESEN, aktion="status", fahrzeug="1")
+    pruefe("veraltetes Abbild: keine PHP-Befunde", bef, [])
+    z = aus.strip()
+    enthaelt("veraltetes Abbild: OK=0", z, "AUDI;OK=0;")
+    enthaelt("veraltetes Abbild: Klasse 10", z, ";GRUND=10;")
+
     # ---------------- Beschraenkung auf den Miniserver ----------------
     #
-    # Die Attrappe fuehrt einen Miniserver unter 192.168.1.10 - nachgesehen in
+    # Die Attrappe fuehrt einen Miniserver unter 192.0.2.10 (Dokumentationsnetz, bis 18.10.2026 192.168.1.10) - nachgesehen in
     # lb/config/system/general.json, nicht angenommen. Der erste Anlauf dieser
     # Zeilen ging davon aus, es sei keiner hinterlegt, und beanstandete
     # daraufhin das richtige Verhalten.
@@ -356,7 +431,7 @@ for fassung, php in PHPS:
         "aktionstoken": TOKEN_LESEN, "schalttoken": TOKEN_SCHALT,
         "steuerung_ein": 0, "gefahr_ein": 0, "nur_miniserver": 1}), encoding="utf-8")
     zwischenspeicher()
-    aus, bef = ruf(php, woher="192.168.1.10", token=TOKEN_LESEN,
+    aus, bef = ruf(php, woher="192.0.2.10", token=TOKEN_LESEN,
                    aktion="status", fahrzeug="1")
     pruefe("Miniserver-Haken: keine PHP-Befunde", bef, [])
     enthaelt("vom Miniserver kommt die Antwort", aus, "AUDI;OK=1;")

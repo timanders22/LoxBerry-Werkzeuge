@@ -16,6 +16,12 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True  # kein __pycache__ neben dem Plugin
 
+# Kein Netz - seit 11.09.2026, wie in au_funktionstest.py und
+# au_neuerungstest.py (Kopf von netzsperre.py).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import netzsperre                                                     # noqa: E402
+netzsperre.einschalten()
+
 QUELLE = Path(sys.argv[1]) if len(sys.argv) > 1 else (
     Path(__file__).resolve().parent.parent
     / "LoxBerry-Plugin-AudiConnect-0.9.0/LoxBerry-Plugin-AudiConnect/bin/audi.py")
@@ -93,20 +99,35 @@ def fahrzeug(mit_befehlen=True):
 CFG_AUS = dict(au.VORGABEN, steuerung_ein=0)
 CFG = dict(au.VORGABEN, steuerung_ein=1, temp_min=16, temp_max=29)
 
+
+def befehl(fahrzeuge, cfg, b):
+    """Ein Befehl, wie ihn der Dienst ausfuehrt - mit FRISCHER Bremse.
+
+    BERICHTIGT 11.09.2026. Hier stand au.befehl_ausfuehren(fahrzeuge, cfg, b);
+    seit 0.9.8 lautet die Signatur (cc, fahrzeuge, cfg, b, bremse), und das
+    Werkzeug brach beim ersten Aufruf mit TypeError ab - an 0.9.14 und 0.9.15
+    gleich, also seit Wochen unbemerkt. Die Bremse ist je Aufruf neu: dieser
+    Test prueft jeden Befehl fuer sich. Mit einer gemeinsamen Bremse griffe
+    nach 30 Befehlen die Stundengrenze und beim zweiten Ladestrom der
+    Mindestabstand von 300 s - dann maesse der Test die Bremse, nicht den
+    Befehl. Die Bremse hat eigene Pruefungen in au_neuerungstest.py.
+    """
+    return au.befehl_ausfuehren(CC, fahrzeuge, cfg, b, au.Bremse())
+
 # --- Steuerung gesperrt ----------------------------------------------------
 F = [fahrzeug()]
 SPUR.clear()
-r = au.befehl_ausfuehren(F, CFG_AUS, {"aktion": "klima_start", "temp": 21})
+r = befehl(F, CFG_AUS, {"aktion": "klima_start", "temp": 21})
 pruefe("gesperrt: abgelehnt", r[0], 0)
 pruefe("gesperrt: Grund genannt", "ausgeschaltet" in r[1], True)
 pruefe("gesperrt: nichts gesendet", SPUR, [])
-r = au.befehl_ausfuehren(F, CFG_AUS, {"aktion": "abruf"})
+r = befehl(F, CFG_AUS, {"aktion": "abruf"})
 pruefe("abruf trotz Sperre", r[0], 1)
 
 # --- Fahrzeugwahl ----------------------------------------------------------
-r = au.befehl_ausfuehren([], CFG, {"aktion": "klima_start", "temp": 21})
+r = befehl([], CFG, {"aktion": "klima_start", "temp": 21})
 pruefe("ohne Fahrzeug: abgelehnt", r[0], 0)
-r = au.befehl_ausfuehren(F, CFG, {"aktion": "klima_start", "fahrzeug": "9", "temp": 21})
+r = befehl(F, CFG, {"aktion": "klima_start", "fahrzeug": "9", "temp": 21})
 pruefe("Fahrzeug 9: abgelehnt", r[0], 0)
 pruefe("Fahrzeug 9: Anzahl genannt", "1 Fahrzeuge" in r[1], True)
 
@@ -116,16 +137,16 @@ for temp, soll in ((35, 0), (5, 0), ("warm", 0), (None, 0), (16, 1), (29, 1), (2
     b = {"aktion": "klima_start", "fahrzeug": "1"}
     if temp is not None:
         b["temp"] = temp
-    r = au.befehl_ausfuehren(F, CFG, b)
+    r = befehl(F, CFG, b)
     pruefe("Klima %r" % temp, r[0], soll)
     if soll == 0:
         pruefe("Klima %r: nichts gesendet" % temp, SPUR, [])
-r = au.befehl_ausfuehren(F, CFG, {"aktion": "klima_start", "fahrzeug": "1", "temp": 35})
+r = befehl(F, CFG, {"aktion": "klima_start", "fahrzeug": "1", "temp": 35})
 pruefe("35 Grad: Grenzen genannt", "16 bis 29" in r[1], True)
 
 # --- Was tatsaechlich an die Bibliothek geht -------------------------------
 SPUR.clear()
-r = au.befehl_ausfuehren(F, CFG, {"aktion": "klima_start", "fahrzeug": "1", "temp": "21.5"})
+r = befehl(F, CFG, {"aktion": "klima_start", "fahrzeug": "1", "temp": "21.5"})
 pruefe("Klima 21,5: angenommen", r[0], 1)
 pruefe("Klima 21,5: genau ein Befehl", len(SPUR), 1)
 marke, arg = SPUR[0]
@@ -136,69 +157,70 @@ pruefe("Klima: Einheit Celsius", str(arg.get("target_temperature_unit")), "°C")
 pruefe("Antwort sagt, dass nicht bestaetigt wurde", "naechste Abruf" in r[1], True)
 
 SPUR.clear()
-au.befehl_ausfuehren(F, CFG, {"aktion": "klima_stop", "fahrzeug": "1"})
+befehl(F, CFG, {"aktion": "klima_stop", "fahrzeug": "1"})
 pruefe("Klima aus", (SPUR[0][0], str(SPUR[0][1].get("command"))), ("klima", "stop"))
 
 SPUR.clear()
-au.befehl_ausfuehren(F, CFG, {"aktion": "laden_start", "fahrzeug": "1"})
+befehl(F, CFG, {"aktion": "laden_start", "fahrzeug": "1"})
 pruefe("Laden ein", (SPUR[0][0], str(SPUR[0][1].get("command"))), ("laden", "start"))
 SPUR.clear()
-au.befehl_ausfuehren(F, CFG, {"aktion": "laden_stop", "fahrzeug": "1"})
+befehl(F, CFG, {"aktion": "laden_stop", "fahrzeug": "1"})
 pruefe("Laden aus", (SPUR[0][0], str(SPUR[0][1].get("command"))), ("laden", "stop"))
 SPUR.clear()
-au.befehl_ausfuehren(F, CFG, {"aktion": "scheibe_ein", "fahrzeug": "1"})
+befehl(F, CFG, {"aktion": "scheibe_ein", "fahrzeug": "1"})
 pruefe("Scheibe ein", (SPUR[0][0], str(SPUR[0][1].get("command"))), ("scheibe", "start"))
 SPUR.clear()
-au.befehl_ausfuehren(F, CFG, {"aktion": "scheibe_aus", "fahrzeug": "1"})
+befehl(F, CFG, {"aktion": "scheibe_aus", "fahrzeug": "1"})
 pruefe("Scheibe aus", (SPUR[0][0], str(SPUR[0][1].get("command"))), ("scheibe", "stop"))
 SPUR.clear()
-r = au.befehl_ausfuehren(F, CFG, {"aktion": "wecken", "fahrzeug": "1"})
+r = befehl(F, CFG, {"aktion": "wecken", "fahrzeug": "1"})
 pruefe("Wecken", (SPUR[0][0], str(SPUR[0][1].get("command"))), ("wecken", "wake"))
 
 # --- Zieltemperatur als Einstellung ---------------------------------------
 SPUR.clear()
-r = au.befehl_ausfuehren(F, CFG, {"aktion": "zieltemperatur", "fahrzeug": "1", "temp": 22})
+r = befehl(F, CFG, {"aktion": "zieltemperatur", "fahrzeug": "1", "temp": 22})
 pruefe("Zieltemperatur gesetzt", (r[0], SPUR[0][0], SPUR[0][1]), (1, "zieltemp", 22.0))
-r = au.befehl_ausfuehren(F, CFG, {"aktion": "zieltemperatur", "fahrzeug": "1", "temp": 40})
+r = befehl(F, CFG, {"aktion": "zieltemperatur", "fahrzeug": "1", "temp": 40})
 pruefe("Zieltemperatur 40: abgelehnt", r[0], 0)
 
 # --- Ladegrenze ------------------------------------------------------------
 for p, soll in ((80, 1), (10, 1), (100, 1), (9, 0), (101, 0), ("viel", 0)):
     SPUR.clear()
-    r = au.befehl_ausfuehren(F, CFG, {"aktion": "ladegrenze", "fahrzeug": "1", "prozent": p})
+    r = befehl(F, CFG, {"aktion": "ladegrenze", "fahrzeug": "1", "prozent": p})
     pruefe("Ladegrenze %r" % p, r[0], soll)
     if soll == 0:
         pruefe("Ladegrenze %r: nichts gesendet" % p, SPUR, [])
 SPUR.clear()
-au.befehl_ausfuehren(F, CFG, {"aktion": "ladegrenze", "fahrzeug": "1", "prozent": 70})
+befehl(F, CFG, {"aktion": "ladegrenze", "fahrzeug": "1", "prozent": 70})
 pruefe("Ladegrenze an die Einstellung", (SPUR[0][0], SPUR[0][1]), ("ladegrenze", 70.0))
 
 # --- Ladestrom: nur die Stufen, die der Connector kennt --------------------
 for a, soll in ((5, 1), (6, 1), (10, 1), (13, 1), (16, 1), (32, 1),
                 (7, 0), (0, 0), (64, 0), ("viel", 0)):
     SPUR.clear()
-    r = au.befehl_ausfuehren(F, CFG, {"aktion": "ladestrom", "fahrzeug": "1", "ampere": a})
+    r = befehl(F, CFG, {"aktion": "ladestrom", "fahrzeug": "1", "ampere": a})
     pruefe("Ladestrom %r" % a, r[0], soll)
-r = au.befehl_ausfuehren(F, CFG, {"aktion": "ladestrom", "fahrzeug": "1", "ampere": 7})
+r = befehl(F, CFG, {"aktion": "ladestrom", "fahrzeug": "1", "ampere": 7})
 pruefe("Ladestrom 7: Stufen genannt", "5, 6, 10, 13, 16, 32" in r[1], True)
 
 # --- Fahrzeug ohne diese Faehigkeit ----------------------------------------
 OHNE = [fahrzeug(mit_befehlen=False)]
 for aktion, b in (("klima_start", {"temp": 21}), ("klima_stop", {}), ("laden_start", {}),
                   ("scheibe_ein", {}), ("wecken", {})):
-    r = au.befehl_ausfuehren(OHNE, CFG, dict(b, aktion=aktion, fahrzeug="1"))
+    r = befehl(OHNE, CFG, dict(b, aktion=aktion, fahrzeug="1"))
     pruefe("ohne Faehigkeit: %s abgelehnt" % aktion, r[0], 0)
     pruefe("ohne Faehigkeit: %s nennt den Grund" % aktion, "bietet" in r[1], True)
 
 # --- Erfundene Aktion ------------------------------------------------------
-r = au.befehl_ausfuehren(F, CFG, {"aktion": "sprengen", "fahrzeug": "1"})
+r = befehl(F, CFG, {"aktion": "sprengen", "fahrzeug": "1"})
 pruefe("erfundene Aktion: abgelehnt", r[0], 0)
 
 # --- Auswahl per Fahrgestellnummer ----------------------------------------
 SPUR.clear()
-r = au.befehl_ausfuehren(F, CFG, {"aktion": "laden_start", "fahrzeug": "WAUZZZ4M0PD000001"})
+r = befehl(F, CFG, {"aktion": "laden_start", "fahrzeug": "WAUZZZ4M0PD000001"})
 pruefe("Auswahl per Fahrgestellnummer", (r[0], SPUR[0][0]), (1, "laden"))
 
 print()
+print(netzsperre.bericht())
 print("%d bestanden, %d durchgefallen" % (OK, FAIL))
 sys.exit(1 if FAIL else 0)

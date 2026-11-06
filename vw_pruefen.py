@@ -40,6 +40,94 @@ FEHLER = []
 HINWEISE = []
 
 
+# ---------------------------------------------------------------------------
+# Abschriften gemeinsamer Dateien (Werkzeug-V1, 08.10.2026)
+#
+# Seit dem Sprachmodul (Nr. 36) traegt die Linie eine Abschrift von
+# Werkzeuge/gemeinsam/sprachausgabe.php und den Abschnitt [ANSAGE] aus
+# gemeinsam/sprachausgabe_texte.json. Beides benutzt die Textfunktion des
+# Moduls (ansage_t), nicht vw_t - die Sprachpruefung meldete deshalb alle
+# Modulschluessel als "nie benutzt", dazu SEITE.L_AUDIO aus dem Selbsttest
+# des Moduls und die Beispieladressen des Moduls als Heimnetzadressen:
+# 133 Scheinbefunde am sp2-Bau 0.9.29 (02.10.2026).
+#
+# Uebergangen wird NUR, was byte-gleich mit der Stammfassung ist - wie in
+# hausstandard_pruefen.py und tote_helfer.py. Eine aeltere oder veraenderte
+# Abschrift wird normal geprueft und bleibt ein Befund (die Abweichung selbst
+# meldet gemeinsam_pruefen.py in der Kette). Vom Abschnitt [ANSAGE] werden nur
+# die Schluessel uebergangen, deren Wert in DE und EN gleich dem der
+# Stammfassung ist - und nur, wenn die Linie sprachausgabe.php unveraendert
+# traegt.
+# ---------------------------------------------------------------------------
+def _stamm():
+    return Path(__file__).resolve().parent / "gemeinsam"
+
+
+def gemeinsame_abschriften(wurzel):
+    """Dateien der Linie, die byte-gleich mit einer Stammfassung unter
+    Werkzeuge/gemeinsam/ sind (wie hausstandard_pruefen.py)."""
+    stamm = _stamm()
+    aus = set()
+    if not stamm.is_dir():
+        return aus
+    vorlagen = {}
+    for s in stamm.iterdir():
+        if s.is_file():
+            vorlagen.setdefault(s.name, []).append(s.read_bytes())
+    for f in Path(wurzel).rglob("*"):
+        if f.is_file() and f.name in vorlagen:
+            try:
+                if f.read_bytes() in vorlagen[f.name]:
+                    aus.add(f.resolve())
+            except OSError:
+                pass
+    return aus
+
+
+def ansage_modulschluessel(wurzel, gem):
+    """'ANSAGE.<schluessel>' fuer jeden Modulschluessel, dessen Wert in
+    language_de.ini UND language_en.ini gleich dem der Stammfassung ist.
+    Leer, wenn die Linie sprachausgabe.php nicht unveraendert traegt."""
+    if not any(f.name == "sprachausgabe.php" for f in gem):
+        return set()
+    quelle = _stamm() / "sprachausgabe_texte.json"
+    if not quelle.is_file():
+        return set()
+    import json
+    soll = json.loads(quelle.read_bytes().decode("utf-8"))
+    ist = {}
+    for sprache in ("de", "en"):
+        p = wurzel / ("templates/lang/language_%s.ini" % sprache)
+        if not p.is_file():
+            return set()
+        ist[sprache], _ = ini_lesen(p)
+    aus = set()
+    for k, w in soll.get("de", {}).items():
+        voll = "ANSAGE." + k
+        if (ist["de"].get(voll) == w
+                and voll in ist["en"]
+                and ist["en"][voll] == soll.get("en", {}).get(k)):
+            aus.add(voll)
+    return aus
+
+
+def _ini_ohne_schluessel(t, frei):
+    """Text einer Sprachdatei, in dem die Zeilen der Schluessel aus `frei`
+    geleert sind (Zeilenzahl bleibt)."""
+    abschnitt = ""
+    aus = []
+    for zeile in t.split("\n"):
+        s = zeile.strip()
+        if s.startswith("[") and s.endswith("]"):
+            abschnitt = s[1:-1]
+        else:
+            m = re.match(r"^([A-Z0-9_]+)\s*=", s)
+            if m and abschnitt + "." + m.group(1) in frei:
+                zeile = ""
+        aus.append(zeile)
+    return "\n".join(aus)
+
+
 def fehl(text):
     FEHLER.append(text)
 
@@ -114,7 +202,7 @@ def php_zerlegen(t):
 
 
 def pruefe_php(wurzel):
-    dateien = sorted(wurzel.rglob("*.php"))
+    dateien = sorted(wurzel.rglob("*.php")) + dateien_mit_shebang(wurzel, r"php")
     if not dateien:
         fehl("Keine PHP-Datei gefunden.")
         return
@@ -138,7 +226,33 @@ def pruefe_php(wurzel):
         if "\t" in t:
             hinw("%s enthaelt Tabulatoren (in der Reiterleiste ist das gewollt)." % f.name)
     print("[OK]   %d PHP-Dateien: Klammer- und Tag-Bilanz ausgeglichen" % len(dateien))
-    print("[INFO] php -l war nicht moeglich - in diesem Arbeitsbereich gibt es kein PHP.")
+    # php -l gegen BEIDE Fassungen, wenn sie dastehen. Bis zum 03.09.2026
+    # stand hier ein festes "war nicht moeglich" - eine Behauptung ueber die
+    # Umgebung, die niemand gemessen hatte. Beide Fassungen liegen auf dem
+    # Arbeitsrechner; LoxBerry 3.x/4.x fahren 7.4, deshalb zaehlt 7.4
+    # genauso wie 8.4.
+    phps = [(v, Path(p)) for v, p in (
+        ("7.4", r"C:\tmp\php-7.4.33-Win32-vc15-x64\php.exe"),
+        ("8.4", r"C:\tmp\php-8.4.27-Win32-vs17-x64\php.exe"))]
+    da = [(v, p) for v, p in phps if p.is_file()]
+    if not da:
+        print("[ -- ] php -l nicht moeglich - keine der beiden PHP-Fassungen "
+              "gefunden. Die Bilanz oben ersetzt sie NICHT.")
+    else:
+        for v, php in da:
+            schlecht = []
+            for f in dateien:
+                r = subprocess.run([str(php), "-n", "-l", str(f)],
+                                   capture_output=True, text=True)
+                # Die AUSGABE wird gelesen, nicht nur der Rueckgabewert:
+                # 8.4 meldet Verfallswarnungen mit Rueckgabe 0.
+                if r.returncode != 0 or "No syntax errors" not in r.stdout:
+                    schlecht.append("%s: %s" % (f.name,
+                                    (r.stdout + r.stderr).strip()[:160]))
+            if schlecht:
+                fehl("php -l %s: " % v + " | ".join(schlecht))
+            else:
+                print("[OK]   php -l %s: %d Dateien fehlerfrei" % (v, len(dateien)))
 
 
 # ---------------------------------------------------------------------------
@@ -180,14 +294,43 @@ def pruefe_sprache(wurzel):
             fehl("language_%s.ini Zeile %d passt nicht auf SCHLUESSEL = \"…\": %s"
                  % (name, nr, zeile[:70]))
 
+    # Werkzeug-V1: unveraenderte Abschriften gemeinsamer Dateien uebergehen.
+    gem = gemeinsame_abschriften(wurzel)
+    frei = ansage_modulschluessel(wurzel, gem)
+    for f in sorted(gem):
+        hinw("%s: unveraenderte Abschrift von Werkzeuge/gemeinsam/%s - in Sprach- "
+             "und Anonymitaetspruefung uebergangen%s"
+             % (f.relative_to(wurzel.resolve()).as_posix(), f.name,
+                (", dazu %d Modulschluessel in [ANSAGE]" % len(frei))
+                if f.name == "sprachausgabe.php" else ""))
+    for f in sorted(wurzel.rglob("sprachausgabe.php")):
+        if f.resolve() not in gem:
+            hinw("%s weicht von Werkzeuge/gemeinsam/sprachausgabe.php ab - wird "
+                 "normal geprueft (gemeinsam_pruefen.py meldet die Abweichung)"
+                 % f.relative_to(wurzel).as_posix())
+
     benutzt = set()
     maskiert = set()
     for f in sorted(wurzel.rglob("*.php")):
+        if f.resolve() in gem:
+            continue
         t = f.read_text(encoding="utf-8")
         benutzt |= set(re.findall(r"vw_t\('([A-Z0-9_]+\.[A-Z0-9_]+)'\)", t))
-        benutzt |= set(re.findall(r"'(VW_[A-Z]+\.[A-Z0-9_]+|BAUSTEIN\.[A-Z0-9_]+)'", t))
+        # Schluessel, die nur als Zeichenkette in einer Tabelle oder in einem
+        # Ausdruck stehen und erst spaeter durch die Textfunktion laufen -
+        # etwa $vw_beschriftung oder vw_t($f >= 2 ? 'A' : 'B'). Bewusst OHNE
+        # Einschraenkung auf bestimmte Abschnitte: die frueher hier stehende
+        # Liste (VW_ und BAUSTEIN) hat die REITER-Schluessel als "nie benutzt"
+        # gemeldet. Angeglichen an vw_sprache_erzeugen.py - zwei Werkzeuge,
+        # die dieselbe Frage verschieden beantworten, sind eines zu viel.
+        # Ein Name, der auf "_" endet, ist der Vorsatz eines zusammengesetzten
+        # Schluessels und zaehlt nicht mit.
+        benutzt |= set(re.findall(r"'([A-Z][A-Z0-9_]*\.[A-Z0-9_]*[A-Z0-9])'", t))
         maskiert |= set(re.findall(r"vw_e\(\s*vw_t\('([A-Z0-9_]+\.[A-Z0-9_]+)'\)", t))
         maskiert |= set(re.findall(r"vw_e\(\s*sprintf\(\s*vw_t\('([A-Z0-9_]+\.[A-Z0-9_]+)'\)", t))
+    # Was wie ein Schluessel aussieht und keiner ist. Angeglichen an
+    # vw_sprache_erzeugen.py.
+    benutzt -= {"ABSCHNITT.SCHLUESSEL"}   # Beispiel im Kommentar der Textfunktion
     benutzt |= {"EINST.DIENST_START", "EINST.DIENST_STOP", "EINST.DIENST_RESTART"}
     for feld in ("INTERVALL", "TAKT_WARTUNG", "TEMP_MIN", "TEMP_MAX",
                  "VERLAUF_TAGE", "WARTEZEIT"):
@@ -197,7 +340,7 @@ def pruefe_sprache(wurzel):
         fehl("Schluessel im PHP benutzt, fehlt in language_de.ini: " + k)
     for k in sorted(benutzt - set(ten)):
         fehl("Schluessel im PHP benutzt, fehlt in language_en.ini: " + k)
-    for k in sorted(set(tde) - benutzt):
+    for k in sorted(set(tde) - benutzt - frei):
         fehl("Schluessel in language_de.ini, aber im PHP nie benutzt: " + k)
     if set(tde) != set(ten):
         fehl("language_de.ini und language_en.ini sind nicht deckungsgleich.")
@@ -220,14 +363,56 @@ def pruefe_sprache(wurzel):
 # ---------------------------------------------------------------------------
 # 3. Reiter, Legenden, Formulare
 # ---------------------------------------------------------------------------
+def dateien_mit_shebang(wurzel, muster):
+    """Endungslose Dateien, deren erste Zeile auf $muster passt.
+
+    Ein Plugin darf ausfuehrbare Dateien ohne Endung mitliefern - dieses
+    fuehrt zwei davon: bin/healthcheck ist PHP mit '#!/usr/bin/env php',
+    uninstall/uninstall ist Bash. Wer nur nach '*.php' und '*.sh' sucht,
+    prueft sie nie und meldet trotzdem eine Zahl.
+    """
+    aus = []
+    for f in sorted(wurzel.rglob("*")):
+        if not f.is_file() or f.suffix:
+            continue
+        try:
+            kopf = f.open("rb").readline(200).decode("utf-8", "replace")
+        except OSError:
+            continue
+        if kopf.startswith("#!") and re.search(muster, kopf):
+            aus.append(f)
+    return aus
+
+
 def pruefe_oberflaeche(wurzel):
     p = wurzel / "webfrontend/htmlauth/index.php"
     t = p.read_text(encoding="utf-8")
 
+    # Die Muster treffen die WIRKLICHE Schreibweise, nicht eine gedachte.
+    #
+    # Bis zum 03.09.2026 verlangte das zweite Muster class="sm-seite"
+    # unmittelbar gefolgt von id=. Die Oberflaeche schreibt aber
+    # class="sm-seite<?= ... ' sm-active' ... ?>" - der Reiter muss
+    # serverseitig aktiv gesetzt werden, damit die Seite ohne JavaScript
+    # bedienbar bleibt. Das Muster fand null Bereiche. Und die Positivliste
+    # entsteht mit implode() aus $vw_reiter_ids, nicht als ausgeschriebener
+    # regulaerer Ausdruck; auch dafuer traf das Muster nichts.
+    #
+    # Ergebnis waren drei Vergleiche leerer Mengen und ein gruener Haken
+    # ueber nichts.
     ziele = re.findall(r'data-ziel="(tab-[a-z0-9]+)"', t)
-    seiten = re.findall(r'class="sm-seite" id="(tab-[a-z0-9]+)"', t)
-    liste = re.search(r"\^tab-\(([a-z0-9|]+)\)", t)
-    liste = set("tab-" + x for x in liste.group(1).split("|")) if liste else set()
+    seiten = re.findall(r'class="sm-seite[^"]*"\s+id="(tab-[a-z0-9]+)"', t)
+    seiten += re.findall(r'id="(tab-[a-z0-9]+)"\s+class="sm-seite', t)
+    m = re.search(r"\$vw_reiter_ids\s*=\s*array\((.*?)\);", t, re.S)
+    liste = (set("tab-" + x for x in re.findall(r"'([a-z0-9]+)'", m.group(1)))
+             if m else set())
+    # Eine Pruefung ueber eine leere Menge misst nichts.
+    if not ziele or not seiten or not liste:
+        fehl("Reiterpruefung misst nichts: %d Leisteneintraege, %d Bereiche, "
+             "%d Eintraege in der Positivliste - mindestens eines davon ist 0. "
+             "Entweder fehlt es wirklich, oder die Schreibweise hat sich "
+             "geaendert und die Muster hier treffen sie nicht mehr."
+             % (len(ziele), len(seiten), len(liste)))
     if set(ziele) != set(seiten):
         fehl("Reiterleiste und Bereiche passen nicht zusammen: %s / %s"
              % (sorted(set(ziele)), sorted(set(seiten))))
@@ -235,12 +420,21 @@ def pruefe_oberflaeche(wurzel):
         fehl("Reiter fehlen in der activetab-Positivliste: %s" % sorted(set(ziele) - liste))
     if liste - set(ziele):
         fehl("Positivliste kennt Reiter, die es nicht gibt: %s" % sorted(liste - set(ziele)))
-    print("[OK]   %d Reiter, %d Bereiche, Positivliste deckungsgleich"
-          % (len(ziele), len(seiten)))
+    # Der Haken erscheint nur, wenn wirklich etwas gemessen wurde. Eine
+    # [OK]-Zeile neben einer [FEHL]-Zeile zur selben Sache liest sich, als
+    # sei die Hälfte in Ordnung.
+    if ziele and seiten and liste:
+        print("[OK]   %d Reiter, %d Bereiche, Positivliste deckungsgleich"
+              % (len(ziele), len(seiten)))
 
     # Legende in jedem Bereich mit Knopfreihe
     ohne = []
-    for m in re.finditer(r'<div class="sm-seite" id="(tab-[a-z0-9]+)"', t):
+    bereiche = list(re.finditer(r'<div class="sm-seite[^"]*" id="(tab-[a-z0-9]+)"', t))
+    if not bereiche:
+        fehl("Legendenpruefung misst nichts: kein einziger Reiterbereich "
+             "gefunden. Das Muster trifft die Schreibweise der Oberflaeche "
+             "nicht mehr.")
+    for m in bereiche:
         rest = t[m.start():]
         tiefe, pos = 0, 0
         for tok in re.finditer(r"</?div", rest):
@@ -257,9 +451,14 @@ def pruefe_oberflaeche(wurzel):
         print("[OK]   Jede Knopfreihe steht unter einer Legende")
 
     # Formulare
+    #
+    # <form\s - mit Pflicht-Leerzeichen. Ohne das traf das Muster auch das
+    # Suchmuster "<form\b.*?</form>", das seit 0.9.10 als Zeichenkette in
+    # vw_test.php steht (die Selbstpruefung zaehlt dort die eigenen Formulare)
+    # - und meldete drei Befunde an einer Datei, die gar kein Formular enthaelt.
     for f in sorted(wurzel.rglob("*.php")):
         tt = f.read_text(encoding="utf-8")
-        forms = re.findall(r"<form[^>]*>", tt)
+        forms = re.findall(r"<form\s[^>]*>", tt)
         for form in forms:
             if 'action="index.php"' not in form:
                 fehl("%s: Formular ohne action=\"index.php\": %s" % (f.name, form[:60]))
@@ -311,7 +510,8 @@ def pruefe_endpunkt(wurzel):
         fehl("Der Endpunkt antwortet bei fehlendem Token nicht mit 403.")
 
     muster = dict(re.findall(r"vw_param\('([a-z]+)',\s*'(/[^']+/)'", t))
-    erwartet = {"fahrzeug", "temp", "prozent", "ampere"}
+    # 'name' und 'wert' seit 0.9.10 (Befehl 'einstellung').
+    erwartet = {"fahrzeug", "temp", "prozent", "ampere", "name", "wert"}
     if set(muster) != erwartet:
         fehl("Geprueft werden %s, erwartet %s" % (sorted(muster), sorted(erwartet)))
 
@@ -320,29 +520,46 @@ def pruefe_endpunkt(wurzel):
     gut = {"fahrzeug": ["1", "12", "WVWZZZE1ZPP000001"],
            "temp": ["21", "21.5", "21,5", "9"],
            "prozent": ["80", "100", "5"],
-           "ampere": ["5", "6", "10", "13", "16", "32"]}
+           "ampere": ["5", "6", "10", "13", "16", "32"],
+           "name": ["sitzheizung", "klima_entriegeln", "stecker_auto"],
+           "wert": ["0", "1"]}
+    # 'abc' ist fuer 'name' ein GUELTIGER Wert - dort stehen Kleinbuchstaben
+    # und Unterstriche. Abgewiesen wird es danach an der Positivliste
+    # vw_schalter(), nicht am Muster. Wer das nicht ausnimmt, misst hier einen
+    # Befund, den es nicht gibt.
+    boese_je_feld = {"name": [b for b in boese if b != "abc"]}
 
     for name, roh in muster.items():
         rx = re.compile("^" + roh.strip("/").lstrip("^").rstrip("$") + "$")
-        for b in boese:
+        for b in boese_je_feld.get(name, boese):
             if rx.match(b):
                 fehl("Muster fuer %s laesst %r durch" % (name, b))
-        for g in gut[name]:
+        for g in gut.get(name, []):
             if not rx.match(g):
                 fehl("Muster fuer %s weist den gueltigen Wert %r ab" % (name, g))
 
-    # Weissliste der Aktionen
+    # Weissliste der Aktionen.
+    #
+    # Die schaltenden Aktionen stehen seit 0.9.10 nicht mehr woertlich im
+    # Endpunkt, sondern kommen aus vw_befehle() der Bibliothek - EINE Quelle
+    # fuer Endpunkt, Tabelle und Ausgangsvorlage. Das Werkzeug liest sie
+    # deshalb dort.
     lesend = re.search(r"\$vw_lesend = array\(([^)]*)\)", t)
-    schaltend = re.search(r"\$vw_schaltend = array\(([^;]*?)\);", t, re.S)
-    if not lesend or not schaltend:
-        fehl("Die Weisslisten der Aktionen sind nicht auffindbar.")
-    else:
-        a = set(re.findall(r"'([a-z_]+)'", lesend.group(1)))
-        b = set(re.findall(r"'([a-z_]+)'", schaltend.group(1)))
-        if a & b:
-            fehl("Aktion steht in beiden Weisslisten: %s" % sorted(a & b))
-        print("[OK]   Endpunkt: %d lesende, %d schaltende Aktionen, Muster weisen "
-              "alle %d Angriffseingaben ab" % (len(a), len(b), len(boese)))
+    if not lesend:
+        fehl("Die Weissliste der lesenden Aktionen ist nicht auffindbar.")
+        return
+    a = set(re.findall(r"'([a-z_]+)'", lesend.group(1)))
+
+    lib = (wurzel / "webfrontend/html/vw_lib.php").read_text(encoding="utf-8")
+    mb = re.search(r"function vw_befehle\(\).*?\n\{(.*?)\n\}", lib, re.S)
+    if "array_keys($vw_alle_befehle)" not in t or not mb:
+        fehl("Die schaltenden Aktionen kommen nicht aus vw_befehle().")
+        return
+    b = set(re.findall(r"'([a-z_]+)'\s*=>\s*array\(", mb.group(1)))
+    if a & b:
+        fehl("Aktion steht in beiden Weisslisten: %s" % sorted(a & b))
+    print("[OK]   Endpunkt: %d lesende, %d schaltende Aktionen aus EINER Quelle, "
+          "Muster weisen alle %d Angriffseingaben ab" % (len(a), len(b), len(boese)))
 
     if "STEUERUNG_AUS" not in t or "DIENST_LAEUFT_NICHT" not in t:
         fehl("Der Endpunkt prueft nicht auf gesperrte Steuerung bzw. toten Dienst.")
@@ -363,25 +580,61 @@ def pruefe_vorlage(wurzel):
     if '"\\t"' not in b:
         fehl("Vor den Kindelementen der Loxone-Vorlage fehlt der Tabulator.")
     reihenfolge = re.findall(r"\$o \.= '([A-Za-z]+)=\"", b)
-    soll = ["Title", "Comment", "Address", "PollingTime", "Title", "Comment", "Check",
-            "Signed", "Analog", "SourceValLow", "DestValLow", "SourceValHigh",
-            "DestValHigh", "DefVal", "MinVal", "MaxVal"]
+    # Stand des Hausstandards vom 25.08.2026, gemessen gegen
+    # XML_Vorlagen_0.9.10/VI_weissware_geraet1_status.xml: HintText am
+    # Wurzelelement zuerst, dazu Unit und HintText je Eintrag. Bis 0.9.9
+    # fehlten alle drei; 35 Plugin-Ordner im Bestand fuehren sie.
+    soll = ["HintText", "Title", "Comment", "Address", "PollingTime",
+            "Title", "Comment", "Check", "Signed", "Analog",
+            "SourceValLow", "DestValLow", "SourceValHigh", "DestValHigh",
+            "DefVal", "MinVal", "MaxVal", "Unit", "HintText"]
     if reihenfolge != soll:
         fehl("Attributreihenfolge der Loxone-Vorlage weicht vom Original ab:\n  %s"
              % reihenfolge)
+    elif "<Info templateType=\"2\"" not in b:
+        fehl("Der Eingangsvorlage fehlt <Info templateType=\"2\" minVersion=\"17010727\"/> "
+             "als erstes Kindelement.")
     else:
-        print("[OK]   Loxone-Vorlage: CRLF, Tabulator und Attributreihenfolge wie im Original")
+        print("[OK]   Loxone-Vorlage: CRLF, Tabulator, Info-Element und "
+              "Attributreihenfolge wie im Original")
+
+    # Die AUSGANGSVORLAGE, seit 0.9.10. Sie folgt demselben Original, hat aber
+    # eigene Attribute - CmdOffMethod und Repeat gehoeren dazu, auch wenn es
+    # keinen Ausbefehl gibt.
+    bvo = re.search(r"function vw_xml_virtual_out\(.*?\n\}", t, re.S)
+    if not bvo:
+        fehl("vw_xml_virtual_out() nicht gefunden - es gibt keine Ausgangsvorlage.")
+    else:
+        v = bvo.group(0)
+        rvo = re.findall(r"\$o \.= '([A-Za-z]+)=\"", v)
+        sollvo = ["HintText", "Title", "Comment", "Address", "CmdInit",
+                  "CloseAfterSend", "CmdSep",
+                  "Title", "Comment", "CmdOnMethod", "CmdOn", "CmdOffMethod",
+                  "CmdOff", "Analog", "Repeat", "RepeatRate", "HintText"]
+        if rvo != sollvo:
+            fehl("Attributreihenfolge der Ausgangsvorlage weicht ab:\n  %s" % rvo)
+        elif '<Info templateType="3"' not in v:
+            fehl("Der Ausgangsvorlage fehlt <Info templateType=\"3\" .../>.")
+        else:
+            print("[OK]   Ausgangsvorlage: Attributreihenfolge und Info-Element "
+                  "wie im Original")
 
     # Die Bedeutungstexte laufen durch strip_tags + html_entity_decode, bevor
     # sie maskiert werden - sonst stuende 'l&auml;dt' in Loxone Config.
     if "html_entity_decode" not in t or "strip_tags" not in t:
         fehl("Die Vorlage loest vor dem Maskieren keine Entitaeten auf - in Loxone "
-             "Config stuende sonst wortwoertlich 'l&auml;dt'.")
+             "Config stuende sonst wortwoertlich 'lädt'.")
 
     # Nachbau der Ausgabe in Python und Pruefung als XML. Das ist ein Nachbau,
     # kein Durchlauf des PHP - es beweist nur, dass die erzeugte Form
     # wohlgeformt ist und die Zeilenenden stimmen.
-    felder = re.findall(r"^\s*'([A-Z]+)'\s*=>\s*array\('([^']*)',\s*'(VW_FELD\.[A-Z_]+)'\)",
+    # Seit 0.9.10 traegt jedes Feld drei weitere Angaben (analog, Kleinst-,
+    # Groesstwert) - die Vorlage braucht sie fuer Unit, Signed und MinVal.
+    # Das alte Muster verlangte die schliessende Klammer unmittelbar nach dem
+    # Sprachschluessel und las deshalb NULL Felder aus; gemeldet wurde
+    # daraufhin "das Suchmuster passt nicht zur Datei" - richtig, und genau
+    # deshalb steht diese Meldung dort.
+    felder = re.findall(r"^\s*'([A-Z]+)'\s*=>\s*array\('([^']*)',\s*'(VW_FELD\.[A-Z_]+)'",
                         t, re.M)
     if len(felder) < 10:
         fehl("Nur %d Statusfelder ausgelesen - das Suchmuster passt nicht zur "
@@ -438,7 +691,8 @@ def pruefe_python(wurzel):
 
 
 def pruefe_shell(wurzel):
-    skripte = sorted(list(wurzel.rglob("*.sh")) + [wurzel / "cron/cron.01min"])
+    skripte = sorted(list(wurzel.rglob("*.sh")) + [wurzel / "cron/cron.01min"]
+                     + dateien_mit_shebang(wurzel, r"(ba)?sh"))
     for f in skripte:
         if not f.is_file():
             continue
@@ -479,13 +733,24 @@ def pruefe_rest(wurzel):
         print("[OK]   Nur gueltige Platzhalter, kein __pycache__, keine Sicherungsdateien")
 
     # Anonymitaet
+    # Werkzeug-V1: die Beispieladressen einer unveraenderten Abschrift und der
+    # unveraenderten Modulschluessel in [ANSAGE] sind keine Heimnetzadressen
+    # dieser Linie. Die Namensliste (_eigene_woerter) gilt weiter fuer ALLE
+    # Dateien - ein Klarname waere auch in der Stammfassung ein Befund.
+    gem = gemeinsame_abschriften(wurzel)
+    frei = ansage_modulschluessel(wurzel, gem)
     verdacht = []
     for f in sorted(wurzel.rglob("*")):
         if not f.is_file() or f.suffix in (".png", ".ico"):
             continue
         t = f.read_text(encoding="utf-8", errors="replace")
+        t_adr = t
+        if f.resolve() in gem:
+            t_adr = ""
+        elif frei and f.suffix == ".ini" and f.parent.name == "lang":
+            t_adr = _ini_ohne_schluessel(t, frei)
         for m in re.finditer(r"\b(?:10|192\.168|172\.(?:1[6-9]|2[0-9]|3[01]))"
-                             r"(?:\.\d{1,3}){2,3}\b(?!\.)", t):
+                             r"(?:\.\d{1,3}){2,3}\b(?!\.)", t_adr):
             verdacht.append("%s: %s" % (f.name, m.group(0)))
         # Wortgrenzen, sonst schlaegt "Anwesenheitsmelder" auf den Namen der
         # Projektdatei an - genau das ist am 05.08.2026 passiert.
@@ -510,16 +775,40 @@ def pruefe_rest(wurzel):
         if not (wurzel / pfad).is_file():
             fehl("Pflichtdatei fehlt: " + pfad)
 
-    # Fassungen an drei Stellen
+    # Fassungen an drei Stellen.
+    #
+    # Der Gleichstand ist der Normalfall - aber NICHT der einzige zulaessige.
+    # LoxBerry liest release.cfg aus dem Zweig master und zieht das Archiv aus
+    # dem TAG. Solange der Tag der neuen Fassung nicht angelegt ist, muessen
+    # die beiden .cfg auf der alten Nummer stehen bleiben; stuenden sie schon
+    # auf der neuen, boeten sie jeder Anlage eine Fassung an, die es als Tag
+    # noch nicht gibt. Genau so arbeitet fassung_setzen.py ohne --auch-release.
+    #
+    # Zulaessig ist deshalb: plugin.cfg genau eine Stelle voraus, beide .cfg
+    # gleich. Alles andere bleibt ein Befund - besonders der umgekehrte Fall,
+    # bei dem die .cfg voraus sind und niemand die Fassung laden kann.
     v = {}
     for name in ("plugin.cfg", "release.cfg", "prerelease.cfg"):
         m = re.search(r"^VERSION=(.+)$", (wurzel / name).read_text(encoding="utf-8"), re.M)
         v[name] = m.group(1).strip() if m else "fehlt"
-    if len(set(v.values())) != 1:
-        fehl("Fassungsnummern weichen ab: %s" % v)
-    else:
+
+    def zahlen(s):
+        try:
+            return tuple(int(x) for x in s.split("."))
+        except ValueError:
+            return None
+
+    a, b, c = zahlen(v["plugin.cfg"]), zahlen(v["release.cfg"]), zahlen(v["prerelease.cfg"])
+    if len(set(v.values())) == 1:
         print("[OK]   Fassung %s in plugin.cfg, release.cfg und prerelease.cfg gleich"
               % list(v.values())[0])
+    elif a and b and c and b == c and a > b:
+        hinw("Vorbereitung: plugin.cfg steht auf %s, die beiden .cfg noch auf %s. "
+             "Das ist richtig, solange der Tag v%s nicht angelegt ist - danach "
+             "fassung_setzen.py mit --auch-release nachziehen."
+             % (v["plugin.cfg"], v["release.cfg"], v["plugin.cfg"]))
+    else:
+        fehl("Fassungsnummern weichen ab: %s" % v)
 
     pc = (wurzel / "plugin.cfg").read_text(encoding="utf-8")
     # Selbstaktualisierung: aus ist immer in Ordnung. An ist es nur, wenn die
@@ -579,21 +868,65 @@ def pruefe_zusammenspiel(wurzel):
         if a != b:
             fehl("Vorgabewert %s: vw.py sagt %s, vw_lib.php sagt %s" % (k, a, b))
     nur_py = set(pv) - set(lv)
-    nur_php = set(lv) - set(pv) - {"aktionstoken", "wartezeit"}
+    # Drei Schluessel gehen nur die Oberflaeche und den Endpunkt an; der Dienst
+    # braucht sie nicht und fuehrt sie deshalb bewusst nicht.
+    nur_php = set(lv) - set(pv) - {"aktionstoken", "wartezeit", "wartezeit_endpunkt"}
     if nur_py:
         fehl("Vorgabewerte nur in vw.py: %s" % sorted(nur_py))
     if nur_php:
         fehl("Vorgabewerte nur in vw_lib.php: %s" % sorted(nur_php))
     print("[OK]   %d Vorgabewerte in Dienst und Bibliothek gleich" % len(set(pv) & set(lv)))
 
-    # Jede schaltende Aktion des Endpunkts muss der Dienst kennen
-    m = re.search(r"\$vw_schaltend = array\((.*?)\);", ep, re.S)
-    aktionen = set(re.findall(r"'([a-z_]+)'", m.group(1))) if m else set()
+    # Die Schalterlisten muessen in Dienst und Bibliothek dieselben sein.
+    #
+    # Seit 0.9.14 gibt es ZWEI Listen: was sich setzen laesst (SCHALTER /
+    # vw_schalter()) und was es zwar gibt, sich aber nicht setzen laesst
+    # (NUR_LESEND / vw_nur_lesend()). Laufen sie auseinander, weist der
+    # Endpunkt einen Namen ab, den der Dienst kennt - oder schlimmer, er
+    # laesst einen durch, den der Dienst nicht setzen kann. Eine Liste, die
+    # niemand nachmisst, laeuft auseinander; bei Renault stand sie vier
+    # Stellen weit falsch.
+    py_s = set(re.findall(r'^\s+"([a-z_]+)":\s+\("', py[py.index("SCHALTER = {"):], re.M))
+    m = re.search(r"function vw_schalter\(\)\s*\{.*?return array\((.*?)\);", lib, re.S)
+    php_s = set(re.findall(r"'([a-z_]+)'\s*=>", m.group(1))) if m else set()
+    m2 = re.search(r"NUR_LESEND = \{(.*?)^\}", py, re.S | re.M)
+    py_n = set(re.findall(r'"([a-z_]+)":', m2.group(1))) if m2 else set()
+    m3 = re.search(r"function vw_nur_lesend\(\)\s*\{.*?return array\((.*?)\);", lib, re.S)
+    php_n = set(re.findall(r"'([a-z_]+)'\s*=>", m3.group(1))) if m3 else set()
+    if not py_s or not php_s:
+        fehl("Schalterlisten nicht messbar: Dienst %d, Bibliothek %d - "
+             "eines der Muster trifft nicht mehr." % (len(py_s), len(php_s)))
+    elif py_s != php_s:
+        fehl("Schaltbare Namen laufen auseinander: nur im Dienst %s, nur in "
+             "der Bibliothek %s" % (sorted(py_s - php_s), sorted(php_s - py_s)))
+    elif py_n != php_n:
+        fehl("Nur-lesende Namen laufen auseinander: nur im Dienst %s, nur in "
+             "der Bibliothek %s" % (sorted(py_n - php_n), sorted(php_n - py_n)))
+    elif py_s & py_n:
+        fehl("Diese Namen stehen in BEIDEN Listen: %s" % sorted(py_s & py_n))
+    else:
+        print("[OK]   %d schaltbare und %d nur lesende Namen, Dienst und "
+              "Bibliothek gleich" % (len(py_s), len(py_n)))
+
+    # Jede schaltende Aktion des Endpunkts muss der Dienst kennen.
+    #
+    # Seit 0.9.10 steht die Liste nicht mehr woertlich im Endpunkt, sondern in
+    # vw_befehle() der Bibliothek - EINE Quelle fuer Endpunkt, Tabelle und
+    # Ausgangsvorlage. Das alte Muster fand dort nichts und meldete daraufhin
+    # "Alle 0 schaltenden Aktionen": eine Null, die wie ein Haken aussah.
+    mb = re.search(r"function vw_befehle\(\).*?\n\{(.*?)\n\}", lib, re.S)
+    aktionen = set(re.findall(r"'([a-z_]+)'\s*=>\s*array\(", mb.group(1))) if mb else set()
+    if not aktionen:
+        fehl("Die schaltenden Aktionen liessen sich aus vw_befehle() nicht auslesen.")
     bekannt = set(re.findall(r'aktion == "([a-z_]+)"', py))
     # Der Dienst fasst Gegensatzpaare zusammen: aktion in ("klima_start", "klima_stop")
     paare = re.findall(r'aktion in \("([a-z_]+)", "([a-z_]+)"\)', py)
     for a1, a2 in paare:
         bekannt.add(a1); bekannt.add(a2)
+    # 'abruf' beantwortet der Dienst vor der Steuerungssperre, ohne Vergleich
+    # auf den Namen in dieser Form.
+    if 'aktion == "abruf"' in py:
+        bekannt.add("abruf")
     fehlt = aktionen - bekannt
     if fehlt:
         fehl("Der Endpunkt bietet Aktionen an, die der Dienst nicht kennt: %s"
@@ -602,41 +935,184 @@ def pruefe_zusammenspiel(wurzel):
     if ueberzaehlig:
         hinw("Der Dienst kennt Aktionen, die der Endpunkt nicht anbietet: %s"
              % sorted(ueberzaehlig))
-    print("[OK]   Alle %d schaltenden Aktionen des Endpunkts kennt der Dienst"
-          % len(aktionen))
+    # Eine Null ist hier KEIN Haken, sondern der Hinweis, dass nichts gemessen
+    # wurde. Ohne diese Unterscheidung liest sich "Alle 0 schaltenden Aktionen"
+    # wie ein bestandener Punkt.
+    if aktionen:
+        print("[OK]   Alle %d schaltenden Aktionen des Endpunkts kennt der Dienst"
+              % len(aktionen))
+    else:
+        print("[INFO] Keine schaltende Aktion ausgelesen - hier wurde NICHTS geprueft.")
 
-    # Jedes MQTT-Feld der Themenliste muss der Dienst auch senden
+    # Jedes MQTT-Feld der Themenliste muss der Dienst auch senden.
+    #
+    # Drei Listen seit 0.9.10: Zahlen, Texte und die Themen oberhalb der
+    # Fahrzeugebene. Wer nur MQTT_FELDER liest, meldet alle sechzehn
+    # Textthemen als "vom Reiter genannt, aber nie gesendet" - ein Befund,
+    # der keiner ist.
+    def liste(name):
+        m = re.search(r"^%s = \((.*?)^\)" % name, py, re.S | re.M)
+        if not m:
+            fehl("Die Themenliste %s liess sich nicht auslesen." % name)
+            return set()
+        return set(re.findall(r'"([a-z_]+)"', m.group(1)))
+
+    gesendet = liste("MQTT_FELDER") | liste("MQTT_TEXTFELDER")
+    oben_py = liste("MQTT_OBEN")
     mq = set(re.findall(r"'fahrzeugN/([a-z_]+)'", lib))
-    gesendet = set(re.findall(r'^\s*"([a-z_]+)",?\s*$',
-                              re.search(r"MQTT_FELDER = \((.*?)\)", py, re.S).group(1), re.M))
-    gesendet |= set(re.findall(r'"([a-z_]+)"',
-                               re.search(r"MQTT_FELDER = \((.*?)\)", py, re.S).group(1)))
-    fehlt = mq - gesendet
-    if fehlt:
-        fehl("Der MQTT-Reiter nennt Themen, die der Dienst nicht sendet: %s" % sorted(fehlt))
-    zuviel = gesendet - mq
-    if zuviel:
-        fehl("Der Dienst sendet Themen, die der MQTT-Reiter nicht nennt: %s" % sorted(zuviel))
-    print("[OK]   %d MQTT-Themen: Reiter und Dienst decken sich" % len(mq))
+    # Die Themen oberhalb der Fahrzeugebene stehen in der Tabelle ohne Vorsatz.
+    mth = re.search(r"function vw_mqtt_themen\(\).*?\n\}", lib, re.S)
+    oben_lib = set(re.findall(r"^\s*'([a-z_]+)'\s*=>\s*\$[zt]\(", mth.group(0), re.M)) if mth else set()
 
-    # Jedes Feld der Endpunkt-Ausgabe muss in der Feldliste stehen
+    for was, a, b in (("je Fahrzeug", mq, gesendet), ("oberhalb", oben_lib, oben_py)):
+        fehlt = a - b
+        if fehlt:
+            fehl("Der MQTT-Reiter nennt Themen (%s), die der Dienst nicht sendet: %s"
+                 % (was, sorted(fehlt)))
+        zuviel = b - a
+        if zuviel:
+            fehl("Der Dienst sendet Themen (%s), die der MQTT-Reiter nicht nennt: %s"
+                 % (was, sorted(zuviel)))
+    print("[OK]   %d MQTT-Themen je Fahrzeug und %d darueber: Reiter und Dienst "
+          "decken sich" % (len(mq), len(oben_lib)))
+
+    # Jedes Feld der Endpunkt-Ausgabe muss in der Feldliste stehen - und
+    # umgekehrt. Sonst legt die Vorlage einen Eingang an, der nie einen Wert
+    # bekommt, oder ein gesendeter Wert steht nirgends beschrieben.
+    #
+    # Gelesen wird der ganze printf-Aufruf, nicht nur die erste Zeichenkette:
+    # seit 0.9.10 sind die Zeilen ueber mehrere Zeilen umbrochen. Und die
+    # Platzhalter sind nicht mehr nur %s - ZAEHLER und FEHLFOLGE gehen als %d
+    # hinaus, weil sie immer eine Zahl sind.
     for aktion, funktion in (("VOLKSWAGEN", "vw_status_felder"),
                              ("LADEN", "vw_laden_felder"),
-                             ("WARTUNG", "vw_wartung_felder")):
+                             ("WARTUNG", "vw_wartung_felder"),
+                             ("POSITION", "vw_position_felder"),
+                             ("VERBRAUCH", "vw_verbrauch_felder")):
         zeile = re.search(r'"%s;OK=%%d;(.*?)\\n"' % aktion, ep, re.S)
-        if not zeile:
-            zeile = re.search(r'"%s;OK=%%d;(.*?)ALTER=%%d' % aktion, ep, re.S)
-        felder = set(re.findall(r"([A-Z]+)=%s", zeile.group(1))) if zeile else set()
-        block = re.search(r"function %s.*?\n}" % funktion, lib, re.S).group(0)
-        liste = set(re.findall(r"^\s*'([A-Z]+)'\s*=>", block, re.M)) - {"OK"}
-        if aktion != "WARTUNG":
-            liste -= {"ALTER"}
-        else:
-            liste -= {"ALTER"}
+        felder = set(re.findall(r"([A-Z]+)=%[sd]", zeile.group(1))) if zeile else set()
+        if not felder:
+            fehl("%s: die Ausgabezeile des Endpunkts liess sich nicht auslesen." % aktion)
+            continue
+        mblock = re.search(r"function %s.*?\n}" % funktion, lib, re.S)
+        if not mblock:
+            # Kein Absturz, sondern ein Befund: die Feldliste gibt es nicht.
+            # Ein Werkzeug, das an einem aelteren Stand abbricht, prueft die
+            # Zeilen danach ueberhaupt nicht mehr.
+            fehl("%s: die Feldliste %s() gibt es nicht." % (aktion, funktion))
+            continue
+        block = mblock.group(0)
+        liste = set(re.findall(r"^\s*'([A-Z]+)'\s*=>", block, re.M)) - {"OK", "ALTER"}
+        felder -= {"ALTER"}
         if felder != liste:
             fehl("%s: Endpunkt sendet %s, die Feldliste nennt %s"
-                 % (aktion, sorted(felder), sorted(liste)))
+                 % (aktion, sorted(felder - liste) or "nichts zusaetzlich",
+                    sorted(liste - felder) or "nichts zusaetzlich"))
     print("[OK]   Endpunkt-Ausgabe und Feldlisten der Oberflaeche decken sich")
+
+
+def pruefe_tabellennamen(wurzel):
+    """Jede Tabellenzeile mit Vorlage nennt einen Namen, den diese Vorlage erzeugt.
+
+    SEIT 17.10.2026 (Welle Bild 17). Der Reiter "Einbindung in Loxone" steht
+    seitdem in Tabellenzeilen Z<seite>_<nr> = "Typ | Name | Bedeutung | Eingang"
+    der Sprachdatei; die alte Liste N01..Nnn ist gestrichen. Die Pruefung
+    darunter suchte weiter nach N01..Nnn und meldete am Bau "Alle 0 virtuellen
+    Eingaenge ... gibt es auch" - gruen, ohne etwas verglichen zu haben.
+
+    Verglichen wird gegen die ERZEUGTE Vorlage, nicht gegen einen Nachbau: das
+    PHP des Plugins laeuft in einer Wegwerf-Attrappe (LBHOMEDIR in einem
+    Zeitordner, LBPPLUGINDIR = FOLDER aus plugin.cfg) und liefert die Vorlagen
+    fuer Fahrzeug 1. Jede Zeile, deren Typ "(Vorlage „X“)" nennt, muss mit
+    ihrem Namen genau einen Befehl in der Vorlage mit dem Behaeltertitel X
+    haben (Muster: vb_bild_vw17_bau_skripte/namen_probe.py).
+
+    Rueckgabe: False, wenn die Sprachdatei keine solche Zeile traegt (aelterer
+    Stand - dann misst die alte Pruefung), sonst True.
+    """
+    import html
+    import json
+    import os
+    import shutil
+    import tempfile
+    ini = (wurzel / "templates/lang/language_de.ini").read_text(encoding="utf-8")
+    zeilen = []
+    for schl, wert in re.findall(r'^(Z\d+_\d+) = "(.*)"$', ini, re.M):
+        teile = [html.unescape(t.strip()) for t in wert.split("|")]
+        m = re.search(r"\(Vorlage „([^“]+)“\)$", teile[0])
+        if m and len(teile) >= 2:
+            zeilen.append((schl, m.group(1), teile[1]))
+    if not zeilen:
+        return False
+    phps = [Path(p) for p in (r"C:\tmp\php-8.4.27-Win32-vs17-x64\php.exe",
+                              r"C:\tmp\php-7.4.33-Win32-vc15-x64\php.exe")]
+    php = next((p for p in phps if p.is_file()), None)
+    if php is None:
+        print("[ -- ] Namen der %d Tabellenzeilen mit Vorlage nicht geprueft - "
+              "kein PHP da, die Vorlagen liessen sich nicht erzeugen" % len(zeilen))
+        hinw("Tabellenzeilen gegen die erzeugten Vorlagen: nicht messbar (kein PHP).")
+        return True
+    cfg = (wurzel / "plugin.cfg").read_text(encoding="utf-8", errors="replace")
+    m = re.search(r"^FOLDER=(\S+)", cfg, re.M)
+    ordner = m.group(1) if m else "volkswagenid"
+    aufrufe = ["vw_vorlage(1, '%s')" % a
+               for a in ("status", "laden", "wartung", "position", "verbrauch")]
+    aufrufe.append("vw_vorlage_vo(1)")
+    lb = Path(tempfile.mkdtemp(prefix="vw_pruefen_lb_"))
+    try:
+        for t in ("config", "data", "log"):
+            (lb / t / "plugins").mkdir(parents=True)
+        skript = lb / "vorlagen.php"
+        skript.write_text(
+            "<?php\n$_SERVER['HTTP_HOST'] = 'loxberry';\n"
+            "require %s;\n$p = vw_paths();\n"
+            "if (realpath($p['home']) !== realpath(getenv('LBHOMEDIR'))) "
+            "{ fwrite(STDERR, \"vw_paths() zeigt nicht auf die Attrappe\\n\"); exit(2); }\n"
+            "$aus = array();\n%s"
+            "echo json_encode($aus);\n"
+            % (json.dumps(str((wurzel / "webfrontend/html/vw_lib.php").resolve())),
+               "".join("$v = %s; $aus[] = $v[1];\n" % a for a in aufrufe)),
+            encoding="utf-8")
+        umg = dict(os.environ)
+        umg.update({"LBHOMEDIR": str(lb), "LBPPLUGINDIR": ordner, "LBLANG": "de",
+                    "PYTHONDONTWRITEBYTECODE": "1"})
+        r = subprocess.run([str(php), "-n", "-d", "display_errors=1",
+                            "-d", "error_reporting=32767",
+                            "-d", "date.timezone=Europe/Berlin", str(skript)],
+                           capture_output=True, cwd=str(lb), env=umg, timeout=60)
+    finally:
+        shutil.rmtree(str(lb), ignore_errors=True)
+    aus = r.stdout.decode("utf-8", "replace")
+    try:
+        texte = json.loads(aus)
+    except ValueError:
+        texte = None
+    if r.returncode != 0 or r.stderr.strip() or texte is None:
+        fehl("Die Vorlagen liessen sich nicht erzeugen (rc %d): %s"
+             % (r.returncode, (r.stderr.decode("utf-8", "replace") + aus).strip()[:300]))
+        return True
+    vorlagen = {}
+    for t in texte:
+        kopf = re.search(r'<(?:VirtualInHttp|VirtualOut) [^>]*?Title="([^"]*)"', t)
+        if kopf:
+            vorlagen.setdefault(html.unescape(kopf.group(1)), []).extend(
+                html.unescape(x) for x in
+                re.findall(r'<(?:VirtualInHttpCmd|VirtualOutCmd) Title="([^"]*)"', t))
+    befunde = []
+    for schl, beh, name in zeilen:
+        if beh not in vorlagen:
+            befunde.append("%s: Vorlage '%s' erzeugt das Plugin nicht" % (schl, beh))
+        elif vorlagen[beh].count(name) != 1:
+            befunde.append("%s: '%s' steht %d-mal in der Vorlage '%s'"
+                           % (schl, name, vorlagen[beh].count(name), beh))
+    if befunde:
+        fehl("Tabellenzeilen nennen Namen, die die erzeugte Vorlage nicht traegt: "
+             + "; ".join(befunde))
+    else:
+        print("[OK]   Alle %d Tabellenzeilen mit Vorlage finden ihren Namen genau "
+              "einmal in der erzeugten Vorlage (%d Vorlagen, PHP %s)"
+              % (len(zeilen), len(vorlagen), php.parent.name.split("-")[1]))
+    return True
 
 
 def pruefe_bausteinnamen(wurzel):
@@ -648,6 +1124,8 @@ def pruefe_bausteinnamen(wurzel):
     Befehlserkennung gescheitert, die nie etwas empfaengt - und haette lange
     gesucht, weil alles andere funktioniert.
     """
+    if pruefe_tabellennamen(wurzel):
+        return
     lib = next(wurzel.glob("webfrontend/html/*_lib.php")).read_text(encoding="utf-8")
     felder = set()
     for fn in ("status", "laden", "wartung"):

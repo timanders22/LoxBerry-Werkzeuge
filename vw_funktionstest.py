@@ -42,7 +42,8 @@ from carconnectivity.vehicle import (ElectricVehicle, GenericVehicle,  # noqa: E
 from carconnectivity.window_heating import WindowHeatings            # noqa: E402
 from carconnectivity.windows import Windows                          # noqa: E402
 
-OK = FAIL = 0
+OK = FAIL = OFFEN = 0
+UNMESSBAR = []
 
 
 def pruefe(name, ist, soll):
@@ -52,6 +53,19 @@ def pruefe(name, ist, soll):
     else:
         FAIL += 1
         print("  [FEHL] %-46s ist=%r soll=%r" % (name, ist, soll))
+
+
+def nicht_messbar(name, grund):
+    """Der dritte Ausgang: hier war nichts zu messen.
+
+    Weder Haken noch Kreuz. Die Zahl steht in der Schlusszeile, damit eine
+    Zusammenfassung nicht besser aussieht als das, was wirklich gemessen
+    wurde.
+    """
+    global OFFEN
+    OFFEN += 1
+    UNMESSBAR.append(name)
+    print("  [ -- ] %-46s %s" % (name, grund))
 
 
 def leere_umgebung():
@@ -222,43 +236,43 @@ for zustand, zahl in ((GenericVehicle.State.OFFLINE, 0), (GenericVehicle.State.P
                       (GenericVehicle.State.IGNITION_ON, 2), (GenericVehicle.State.DRIVING, 3),
                       (GenericVehicle.State.UNKNOWN, None), (GenericVehicle.State.INVALID, None)):
     v.state._set_value(zustand)
-    pruefe("Zustand %s" % zustand.value, vw.abbild_status(v)["zustand"], zahl)
+    pruefe("Zustand %s" % zustand.value, vw.abbild_status(v, CFG)["zustand"], zahl)
 for zustand, zahl in ((Doors.LockState.LOCKED, 1), (Doors.LockState.UNLOCKED, 0),
                       (Doors.LockState.INVALID, None), (Doors.LockState.UNKNOWN, None)):
     v.doors.lock_state._set_value(zustand)
-    pruefe("Verriegelung %s" % zustand.value, vw.abbild_status(v)["verriegelt"], zahl)
+    pruefe("Verriegelung %s" % zustand.value, vw.abbild_status(v, CFG)["verriegelt"], zahl)
 for zustand, zahl in ((Doors.OpenState.CLOSED, 0), (Doors.OpenState.OPEN, 1),
                       (Doors.OpenState.AJAR, 1), (Doors.OpenState.UNSUPPORTED, None)):
     v.doors.open_state._set_value(zustand)
-    pruefe("Tueren %s" % zustand.value, vw.abbild_status(v)["tueren_offen"], zahl)
+    pruefe("Tueren %s" % zustand.value, vw.abbild_status(v, CFG)["tueren_offen"], zahl)
 for zustand, zahl in ((Charging.ChargingState.CHARGING, 1), (Charging.ChargingState.OFF, 0),
                       (Charging.ChargingState.READY_FOR_CHARGING, 0),
                       (Charging.ChargingState.CONSERVATION, 0),
                       (Charging.ChargingState.ERROR, 0),
                       (Charging.ChargingState.UNSUPPORTED, None)):
     v.charging.state._set_value(zustand)
-    pruefe("Laden %s" % zustand.value, vw.abbild_laden(v)["laedt"], zahl)
+    pruefe("Laden %s" % zustand.value, vw.abbild_laden(v, CFG)["laedt"], zahl)
 for zustand, zahl in ((Climatization.ClimatizationState.OFF, 0),
                       (Climatization.ClimatizationState.HEATING, 1),
                       (Climatization.ClimatizationState.COOLING, 1),
                       (Climatization.ClimatizationState.VENTILATION, 1),
                       (Climatization.ClimatizationState.INVALID, None)):
     v.climatization.state._set_value(zustand)
-    pruefe("Klima %s" % zustand.value, vw.abbild_status(v)["klima_an"], zahl)
+    pruefe("Klima %s" % zustand.value, vw.abbild_status(v, CFG)["klima_an"], zahl)
 
 # ---------------------------------------------------------------------------
 # Ein abgeschaltetes Attribut zaehlt wie ein fehlendes
 # ---------------------------------------------------------------------------
 v = id4()
 v.odometer.enabled = False
-pruefe("abgeschaltetes Attribut -> None", vw.abbild_stamm(v)["kilometerstand"], None)
+pruefe("abgeschaltetes Attribut -> None", vw.abbild_stamm(v, CFG)["kilometerstand"], None)
 
 # ---------------------------------------------------------------------------
 # Termine in der Vergangenheit ergeben negative Tage, keine 0
 # ---------------------------------------------------------------------------
 v = id4()
 v.maintenance.inspection_due_at._set_value(datetime.now(timezone.utc) - timedelta(days=12))
-pruefe("ueberfaellige Inspektion", vw.abbild_wartung(v)["inspektion_tage"], -12)
+pruefe("ueberfaellige Inspektion", vw.abbild_wartung(v, CFG)["inspektion_tage"], -12)
 
 # ---------------------------------------------------------------------------
 # Hilfsfunktionen
@@ -320,7 +334,14 @@ except Exception as err:                                              # noqa: BL
     text = str(err).lower()
     netzfehler = ("connection" in text or "proxy" in text or "timed out" in text
                   or "name resolution" in text or "max retries" in text)
-    if art == "ConfigurationError":
+    if art == "ConfigurationError" and "is not known" in text:
+        # Der Connector fehlt in DIESER Umgebung - das sagt nichts ueber die
+        # Konfiguration, die das Plugin baut. Gemessen am 03.09.2026:
+        # "connector type 'volkswagen' is not known", weil auf dem
+        # Arbeitsrechner nur der Kern carconnectivity liegt.
+        nicht_messbar("Bibliothek nimmt die Konfiguration an",
+                      "der Volkswagen-Connector ist hier nicht installiert")
+    elif art == "ConfigurationError":
         pruefe("Bibliothek nimmt die Konfiguration an", "ConfigurationError: " + str(err),
                "kein Konfigurationsfehler")
     elif netzfehler or art in ("AuthenticationError", "TemporaryAuthenticationError",
@@ -332,5 +353,11 @@ except Exception as err:                                              # noqa: BL
         pruefe("Bibliothek nimmt die Konfiguration an", art + ": " + str(err), "kein Fehler")
 
 print()
-print("%d bestanden, %d durchgefallen" % (OK, FAIL))
+if OFFEN:
+    print("%d bestanden, %d durchgefallen, %d nicht feststellbar" % (OK, FAIL, OFFEN))
+    print("   nicht gemessen: " + ", ".join(UNMESSBAR))
+    if not FAIL:
+        print("   Alles bestanden, was messbar war.")
+else:
+    print("%d bestanden, %d durchgefallen" % (OK, FAIL))
 sys.exit(1 if FAIL else 0)

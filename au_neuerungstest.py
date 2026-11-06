@@ -32,6 +32,14 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True  # kein __pycache__ neben dem Plugin
 
+# Kein Netz - seit 11.09.2026. Ohne Sperre fragte die Bibliothek 13 Mal bei
+# Nominatim und beim Zeitserver, zuletzt noch beim Beenden des Interpreters,
+# und das endete in einer Zugriffsverletzung (Rueckgabewert 139 bei
+# "0 durchgefallen"). Einzelheiten im Kopf von netzsperre.py.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import netzsperre                                                     # noqa: E402
+netzsperre.einschalten()
+
 QUELLE = Path(sys.argv[1]) if len(sys.argv) > 1 else (
     Path(__file__).resolve().parent.parent
     / "LoxBerry-Plugin-AudiConnect-0.9.8/bin/audi.py")
@@ -387,11 +395,30 @@ o2 = {"laedt": 0, "soc": 80.0, "kilometerstand": 1000.0}
 au.abgeleitetes_ergaenzen("1", o2, CFG, merker3, 0, None)
 pruefe("ohne Kapazitaet keine Menge", o2["ladekwh"], None)
 
-# 5. Stoerungszaehler und Ladeempfehlung wandern durch.
+# 5. Ladeempfehlung wandert durch.
 f = {"laedt": None, "soc": None, "kilometerstand": None}
 au.abgeleitetes_ergaenzen("9", f, CFG, {}, 4, 1)
-pruefe("fehlfolge", f["fehlfolge"], 4)
 pruefe("ladeempf", f["ladeempf"], 1)
+
+# 5b. Der Stoerungszaehler steht seit 0.9.12 in abbild_schreiben().
+#
+# Vorher wurde er in abgeleitetes_ergaenzen() gesetzt - und das laeuft nur
+# im Erfolgsfall je Fahrzeug, mit dem Zaehler des VORIGEN Takts. Waehrend
+# einer Stoerung blieb die Fahrzeugkarte unveraendert stehen; FEHLFOLGE
+# erschien erst beim Wiederanlaufen, also genau dann, wenn die Stoerung
+# vorbei war. Die Hilfe und die README nennen FEHLFOLGE >= 3 aber
+# ausdruecklich als Ausfallerkennung.
+pruefe("fehlfolge steht NICHT mehr in abgeleitetes_ergaenzen",
+       "fehlfolge" in f, False)
+lox_ok = au.abbild_schreiben({"ts": 1788000000, "fahrzeuge": {"1": {"ok": 1}}},
+                             CFG, 1, "", au.CODE_OK, 0)
+pruefe("fehlfolge im Erfolgsfall", lox_ok["fahrzeuge"]["1"]["fehlfolge"], 0)
+lox_stoer = au.abbild_schreiben({"ts": 1788000000, "fahrzeuge": {"1": {"ok": 1}}},
+                                CFG, 0, "Abruf fehlgeschlagen", au.CODE_UNERREICHBAR, 4)
+pruefe("fehlfolge AUCH bei einer Stoerung",
+       lox_stoer["fahrzeuge"]["1"]["fehlfolge"], 4)
+pruefe("bei einer Stoerung geht ok=0 hinaus", lox_stoer["ok"], 0)
+pruefe("und der Grund steht dabei", lox_stoer["fehler_code"], au.CODE_UNERREICHBAR)
 
 # 6. Standzeit aus zustand_seit.
 st = {"zustand_seit": 7325, "laedt": None, "soc": None, "kilometerstand": None}
@@ -525,5 +552,6 @@ pruefe("Liste der eingreifenden Befehle stimmt ueberein",
 
 
 print()
+print(netzsperre.bericht())
 print("%d bestanden, %d durchgefallen" % (OK, FAIL))
 sys.exit(1 if FAIL else 0)

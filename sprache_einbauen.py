@@ -91,9 +91,9 @@ TEST = "Test"
 LOG = "Logdateien"
 
 [LEGENDE]
-LESEN = "Ansehen &mdash; fragt nur ab, ver&auml;ndert nichts"
-TECHNIK = "Technische Auskunft &mdash; f&uuml;r die Fehlersuche"
-AKTION = "L&ouml;st etwas aus &mdash; sendet oder ver&auml;ndert"
+LESEN = "Ansehen — fragt nur ab, verändert nichts"
+TECHNIK = "Technische Auskunft — für die Fehlersuche"
+AKTION = "Löst etwas aus — sendet oder verändert"
 
 [ALLGEMEIN]
 JA = "ja"
@@ -115,9 +115,9 @@ TEST = "Test"
 LOG = "Log files"
 
 [LEGENDE]
-LESEN = "View &mdash; reads only, changes nothing"
-TECHNIK = "Technical information &mdash; for troubleshooting"
-AKTION = "Triggers something &mdash; sends or changes"
+LESEN = "View — reads only, changes nothing"
+TECHNIK = "Technical information — for troubleshooting"
+AKTION = "Triggers something — sends or changes"
 
 [ALLGEMEIN]
 JA = "yes"

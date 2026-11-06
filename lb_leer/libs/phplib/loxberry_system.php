@@ -29,7 +29,36 @@ foreach (array($lbpconfigdir, $lbplogdir, $lbpdatadir) as $d) {
 
 class LBSystem
 {
-    public static function lblanguage() { return 'de'; }
+    /* ==================================================================
+     * lblanguage() achtet LBLANG - gehaertet am 29.08.2026
+     * ==================================================================
+     *
+     * Bis dahin stand hier fest 'de'. Damit wurde der ZWEITE Sprachpfad
+     * eines Plugins von KEINER Pruefung je betreten: mi_sprache() und die
+     * gleichnamigen Funktionen der anderen Linien fragen zuerst
+     * LBSystem::lblanguage() und kommen an getenv('LBLANG') gar nicht mehr
+     * heran.
+     *
+     * Aufgefallen an Midea2Lox: zwoelf Renderlaeufe in "beiden" Sprachen
+     * lieferten byteweise dasselbe. Die halbe Oberflaeche war fest deutsch,
+     * und die Pruefkette war gruen.
+     *
+     * KEIN Rueckschritt fuer vorhandene Pruefungen: LBLANG ist in der
+     * Werkzeugumgebung nicht gesetzt, und rendern.py setzt es nicht -
+     * gemessen. Ohne die Variable bleibt es bei 'de'.
+     *
+     * Nur zweibuchstabige Kuerzel werden angenommen. Ein Prueflauf, der aus
+     * Versehen einen Pfad in LBLANG stehen hat, soll nicht stillschweigend
+     * eine Sprache erfinden.
+     * ================================================================== */
+    public static function lblanguage()
+    {
+        $l = getenv('LBLANG');
+        if (is_string($l) && preg_match('/^[a-zA-Z]{2}$/', $l)) {
+            return strtolower($l);
+        }
+        return 'de';
+    }
     public static function get_localip() { return '192.168.1.50'; }
     public static function lbhostname() { return 'loxberry'; }
     public static function lbfriendlyname() { return 'LoxBerry Pruefstand'; }
@@ -45,7 +74,7 @@ class LBSystem
     public static function get_miniservers()
     {
         return array(1 => array(
-            'Name' => 'Miniserver', 'IPAddress' => '192.168.1.10', 'Port' => 80,
+            'Name' => 'Miniserver', 'IPAddress' => '192.0.2.10', 'Port' => 80,
             'Admin' => 'admin', 'Pass' => 'geheim123',
             'Admin_RAW' => 'admin', 'Pass_RAW' => 'geheim123',
             'Credentials' => 'admin:geheim123', 'Credentials_RAW' => 'admin:geheim123',
@@ -57,7 +86,14 @@ class LBSystem
     {
         // Liest die Sprachdatei des Pruefling-Plugins wie das Original.
         $dir = getenv('LBPTEMPLATEDIR');
-        $lang = 'de';
+        /* Die Sprache kommt aus lblanguage(), nicht aus einer festen Zeile.
+         *
+         * Bis zum 29.08.2026 stand hier $lang = 'de'. Ein Plugin, das die
+         * SDK-Funktion benutzt statt einer eigenen - Intercom etwa -, blieb
+         * damit deutsch, egal was LBLANG sagte. Das war die DRITTE zu
+         * nachsichtige Stelle derselben Attrappe, und sie hat beim ersten
+         * strengen Durchgang prompt einen Fehlalarm erzeugt. */
+        $lang = LBSystem::lblanguage();
         $cand = array();
         if ($file) { $cand[] = $dir . '/lang/' . str_replace('_de.ini', '_' . $lang . '.ini', $file); }
         $cand[] = $dir . '/lang/language_' . $lang . '.ini';

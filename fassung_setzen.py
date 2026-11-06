@@ -144,6 +144,33 @@ def schreibe(p, alt, neu_bytes):
 KOPFZEILEN = 20
 
 
+def readme_andere(d):
+    """(Zeilennummer, Fassung) der ERSTEN Fassungszeile im Kopf,
+    ganz gleich welche sie nennt.
+
+    Gebraucht an zwei Stellen: vorher, um eine abweichende Nummer
+    als Befund zu melden - und nachher, um nicht "keine
+    Fassungszeile im Kopf" zu melden, wo eine steht. Der
+    Nachher-Bericht suchte frueher allein nach der NEUEN Nummer
+    und sagte sonst "--". Bei MG iSmart stand dort 1.1.2, waehrend
+    plugin.cfg 1.1.7 trug; der Bericht nannte das "keine".
+    """
+    for i, z in enumerate(d.split(b'\n')[:KOPFZEILEN]):
+        if z.lstrip(b' \t>*_').startswith(b'#'):
+            continue
+        # Eine Fassung ist nur eine VOLLSTAENDIGE Nummer. Bis 24.09.2026
+        # stand hier '[0-9]+\.[0-9][0-9.]*' - das traf "Fassung 0.9.x -
+        # ungeprueft" (AnkerSolix, VolkswagenID) als "0.9." und meldete
+        # ANSEHEN, wo nichts war. Gegen alle 379 READMEs gemessen: genau
+        # diese 17 Fehlalarme fallen weg, sonst keine Abweichung.
+        m2 = re.search(
+            rb'(?<![0-9.])(?:Version|Fassung)[ :]+([0-9]+(?:\.[0-9]+)+)'
+            rb'(?!\.?[0-9A-Za-z])', z)
+        if m2:
+            return (i + 1, m2.group(1).decode())
+    return (None, None)
+
+
 def readme_kopfzeile(d, alte_fassung):
     """(Zeilennummer, Zeile) der Kopfzeile - oder (None, None).
 
@@ -154,7 +181,10 @@ def readme_kopfzeile(d, alte_fassung):
         return (None, None)
     ziel = alte_fassung.encode() if isinstance(alte_fassung, str) else alte_fassung
     zeilen = d.split(b'\n')[:KOPFZEILEN]
-    muster = rb'(?<![0-9.])Version[ :]+' + re.escape(ziel) + rb'(?![0-9])'
+    # 'Fassung' seit 31.08.2026 mit dabei - Skoda-Connect-NG schreibt es so,
+    # und ohne das Wort meldete das Werkzeug 'nichts zu tun'.
+    muster = (rb'(?<![0-9.])(?:Version|Fassung)[ :]+' + re.escape(ziel)
+              + rb'(?![0-9])')
     for i, z in enumerate(zeilen):
         nackt = z.lstrip(b' \t>*_')
         if nackt.startswith(b'#'):
@@ -199,14 +229,8 @@ else:
     else:
         # Nennt die README ueberhaupt IRGENDEINE Fassung im Kopf? Wenn ja,
         # weicht sie von der plugin.cfg ab - das ist ein Befund, kein '?'.
-        andere = None
-        for i, z in enumerate(d.split(b'\n')[:KOPFZEILEN]):
-            if z.lstrip(b' \t>*_').startswith(b'#'):
-                continue
-            m2 = re.search(rb'(?<![0-9.])Version[ :]+([0-9]+\.[0-9][0-9.]*)', z)
-            if m2:
-                andere = (i + 1, m2.group(1).decode())
-                break
+        andere = readme_andere(d)
+        andere = andere if andere[0] else None
         if andere:
             # KEIN Automatismus daraus: die Zeile kann auch ein Verweis auf
             # eine FREMDE Fassung sein. Bei Ultraschall 1.1.10 steht im Kopf
@@ -286,7 +310,7 @@ if 'README.md' in stand and stand['README.md'][2]:
     if nr:
         # NUR diese eine Zeile anfassen, und darin nur die Nummer. Der Rest
         # der Zeile ("- ohne Geraet gebaut", "· LoxBerry ab 3.0") bleibt.
-        neu_zeile = re.sub(rb'(Version[ :]+)' + re.escape(alt.encode()),
+        neu_zeile = re.sub(rb'((?:Version|Fassung)[ :]+)' + re.escape(alt.encode()),
                            rb'\g<1>' + NUMMER.encode(), zeile, count=1)
         if neu_zeile != zeile:
             neu = d.replace(zeile, neu_zeile, 1)
@@ -339,9 +363,19 @@ if not PROBE and geaendert:
             continue
         if name == 'README.md':
             nr, _z = readme_kopfzeile(d, NUMMER)
-            print('  %-16s %-8s %s%s'
-                  % (name, NUMMER if nr else '--', stil(d),
-                     '' if nr else '  (keine Fassungszeile im Kopf)'))
+            if nr:
+                print('  %-16s %-8s %s' % (name, NUMMER, stil(d)))
+            else:
+                # NICHT einfach '--': steht dort eine ANDERE Fassung, ist
+                # das ein Befund und keine Abwesenheit.
+                a_nr, a_num = readme_andere(d)
+                if a_nr:
+                    print('  %-16s %-8s %s  <== ANSEHEN: Zeile %d nennt'
+                          ' %s, gesetzt wurde %s'
+                          % (name, a_num, stil(d), a_nr, a_num, NUMMER))
+                else:
+                    print('  %-16s %-8s %s  (keine Fassungszeile im Kopf)'
+                          % (name, '--', stil(d)))
             continue
         m = re.search(rb'^VERSION=([^\r\n]*)', d, re.M)
         print('  %-16s %-8s %s' % (name, m.group(1).decode().strip() if m else '?', stil(d)))

@@ -93,7 +93,7 @@ STRUKTUR = {
             "uuidAction": "aaaa0003-0000-0000-ffff000000000003",
             "room": "0af17bf3-0125-029b-ffff112233445566",
             "defaultRating": 2, "isSecured": False,
-            "details": {"format": "%.1f&deg;"},
+            "details": {"format": "%.1f°"},
             "states": {"value": "bbbb0003-0000-0000-ffff000000000001"},
         },
         "aaaa0004-0000-0000-ffff000000000004": {

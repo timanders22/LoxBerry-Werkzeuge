@@ -256,9 +256,27 @@ def funktionen(dateien):
             if not re.search(r"function_exists\s*\(\s*['\"]" + re.escape(nm)
                              + r"['\"]\s*\)", roh):
                 unbewacht.add(nm)
+        # DIE DEFINITION IST KEIN AUFRUF.
+        #
+        # BERICHTIGT 05.09.2026. In 'function au_status_felder()' steht vor
+        # dem Namen ein Leerzeichen, und der Rueckblick oben schliesst nur
+        # $ > : und Wortzeichen aus - die Definitionszeile zaehlte damit als
+        # Aufruf ihrer selbst. Die Zeile 'definiert, aber nirgends
+        # aufgerufen' war dadurch blind: ueber die 49 hoechsten Ordner
+        # gemessen war sie genau einmal nicht leer, und dort nur, weil der
+        # Name zufaellig ein PHP-Schluesselwort ist und deshalb schon durch
+        # die Zeile darunter fiel. Aufgefallen ist es, weil tote_helfer.py
+        # am selben Ordner vier Funktionen ohne Aufrufer fand.
+        #
+        # Ein Rueckblick fester Laenge reicht dafuer nicht (die Zahl der
+        # Leerzeichen und das optionale & sind veraenderlich), deshalb wird
+        # der Text VOR der Fundstelle geprueft.
+        vor_def = re.compile(r'\bfunction\b\s*&?\s*$')
         for m in re.finditer(r'(?<![\$>:\w])([a-z_]\w*)\s*\(', t):
             nm = m.group(1)
             if nm in SCHLUESSELWOERTER or nm in EINGEBAUT:
+                continue
+            if vor_def.search(t[max(0, m.start() - 40):m.start()]):
                 continue
             aufrufe.setdefault(nm, []).append((f, t[:m.start()].count('\n') + 1))
     # Kuerzel des Plugins aus den Definitionen ableiten
@@ -270,7 +288,30 @@ def funktionen(dateien):
     # Fall, der im entpackten Archiv "cannot redeclare" wirft - und der
     # rutschte bis zur Eichung am 28.08.2026 durch.
     doppelt = sorted({x for x in alle if alle.count(x) > 1 and x in unbewacht})
-    return sorted(eigen - defs), doppelt, sorted(d for d in defs if d not in aufrufe), aufrufe
+    # METHODEN SIND KEINE FREIEN FUNKTIONEN.
+    #
+    # Das Werkzeug liest den Text, nicht die Klassenstruktur: eine Methode
+    # sieht wie eine Funktion aus, und ihr Aufruf steht als $this->name(),
+    # self::name() oder static::name() da - Formen, die der Rueckblick des
+    # Aufrufmusters ausdruecklich ausschliesst. Ohne diese Gegenprobe meldete
+    # die Zeile ab dem 05.09.2026 bei zwei Linien saemtliche Methoden ihrer
+    # Klassen als tot. Regeln/02 verlangt genau diese Gegenprobe, bevor ein
+    # Name als tot gilt; sie stand dort bisher als Handarbeit fuer den Leser.
+    methodisch = set()
+    for f in dateien:
+        t = nur_code(Path(f).read_text(encoding='utf-8', errors='replace'))
+        # Jeder Aufruf an einem Objekt oder einer Klasse - nicht nur $this:
+        # eine Methode wird auch von aussen gerufen ($api->getDevices()).
+        for m in re.finditer(r'(?:->|::)\s*([a-zA-Z_]\w*)\s*\(', t):
+            methodisch.add(m.group(1))
+    # Die Eigennamen von PHP werden nie im Text gerufen; sie sind nie tot.
+    magisch = {'__construct', '__destruct', '__toString', '__get', '__set',
+               '__isset', '__unset', '__call', '__callStatic', '__invoke',
+               '__clone', '__sleep', '__wakeup', '__serialize',
+               '__unserialize', '__set_state', '__debugInfo'}
+    ungenutzt = sorted(d for d in defs
+                       if d not in aufrufe and d not in methodisch and d not in magisch)
+    return sorted(eigen - defs), doppelt, ungenutzt, aufrufe
 
 
 def main():

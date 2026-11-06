@@ -39,7 +39,7 @@ import wirkungstest as W
 
 
 def formulare(datei, plugin):
-    html, _ = W.lauf(datei, plugin)
+    html, _befunde, _rest = W.lauf(datei, plugin)
     p = W.Formulare()
     p.feed(html)
     aus = []

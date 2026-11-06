@@ -111,9 +111,11 @@ def svg_bauen() -> str:
     z.append('  hier etwas aendert, ohne das Werkzeug zu benutzen, laesst Vektor und')
     z.append('  Bild auseinanderlaufen - und LoxBerry 3 zeigt das PNG.')
     z.append('')
-    z.append('  Aufbau wie bei den uebrigen Plugins der Reihe: Scheibe r=246 mit')
-    z.append('  Radialverlauf, innerer Ring r=232 mit 35 % Deckung, flaches weisses')
+    z.append('  Aufbau: Scheibe r=246 mit Radialverlauf, innerer Ring r=232 mit')
+    z.append('  28 % Deckung und Breite 6 (Hausmass aus REGELN_2), flaches weisses')
     z.append('  Motiv, gestrichelte Trennlinie bei y=345, darunter zwei Textzeilen.')
+    z.append('  Der Ring wich bis 0.9.5 mit 35 % und Breite 3 vom Hausmass ab; die')
+    z.append('  vier Schwesterplugins tragen die alten Werte noch.')
     z.append('')
     z.append('  Keine fremde Wortmarke ausser dem Herstellernamen im Plugin-Namen -')
     z.append('  bei den Auto-Plugins ist er noetig, weil sich die Wagen sonst nicht')
@@ -138,8 +140,21 @@ def svg_bauen() -> str:
     z.append('  <!-- Scheibe und innerer Ring -->')
     z.append('  <circle cx="%d" cy="%d" r="%d" fill="url(#bg-grad)" />'
              % (MITTE, MITTE, R_SCHEIBE))
+    # Ring nach dem MASS DES HAUSSTANDARDS: stroke-opacity 0.28, Breite 6.
+    #
+    # BERICHTIGT am 03.09.2026. Hier standen 0.35 und 3 - abgeschrieben von den
+    # Schwesterplugins, nicht aus REGELN_2 geholt. Der Hausstandard nennt den
+    # zweiten Ring ausdruecklich als "eigentlichen Wiedererkennungswert" und
+    # gibt 0.28 bei Breite 6 an: eine hauchduenne hellere Linie knapp innerhalb
+    # des Randes, keine Andeutung einer Andeutung.
+    #
+    # DIESE AENDERUNG GILT VORERST NUR FUER BYD. Die vier Schwesterlinien
+    # (Volkswagen ID, Skoda Connect NG, Renault NG, Audi Connect) haben eigene
+    # Erzeuger und tragen weiterhin 0.35/3; BYD sieht damit bis auf Weiteres
+    # anders aus als sie. Das ist eine bewusste Entscheidung und steht in der
+    # Freigabenotiz zu 0.9.6.
     z.append('  <circle cx="%d" cy="%d" r="%d" fill="none" stroke="#ffffff" '
-             'stroke-opacity="0.35" stroke-width="3" />' % (MITTE, MITTE, R_RING))
+             'stroke-opacity="0.28" stroke-width="6" />' % (MITTE, MITTE, R_RING))
     z.append('')
     z.append('  <g filter="url(#shadow)">')
     z.append('    <!-- Blitz: Beizeichen fuer den Elektroantrieb -->')

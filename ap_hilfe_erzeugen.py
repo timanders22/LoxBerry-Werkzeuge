@@ -7,6 +7,15 @@ deshalb erlaubt - gerade Anfuehrungszeichen dagegen nicht, sie wuerden den
 INI-Wert beenden.
 
 Aufruf:  python3 Werkzeuge/ap_hilfe_erzeugen.py <Plugin-Ordner>
+
+STAND (vb_bild_ap12, 14.10.2026, Welle Bild 12 VOLL / Musterprojekt, APC-UPS NG 1.2.20): K10
+nennt die zwei Baustein-Listen im Reiter Einbindung in Loxone; sonst unveraendert.
+
+STAND (vb_g16_ap, 25.10.2026, Gruppe 16 / MQTT, APC-UPS NG 1.2.23): K35, K49, K51, K53 neu gefasst;
+K54-K61 neu (Sprachausgabe mit Lautsprecher-Hinweis, Haus-Thema, Lebenszeichen und Fehlwerte).
+
+STAND (Drift-Abgleich, 06.11.2026): angeglichen an APC-UPS 1.2.29, 1 Schluessel neu (K62),
+2 Werte geaendert (K55, K59), 0 entfernt. Schreibt erst nach bestandener Pruefung.
 """
 import io, os, re, sys
 
@@ -28,19 +37,27 @@ H = [
  ('K04',
   'Das Plugin misst nichts selbst — es fragt <code>apcupsd</code> ab, den '
   'Dienst, der mit der USV spricht. Der wird bei der Installation mitgebracht '
-  'und gestartet. Zwei Stolpersteine gibt es dabei:',
+  'und gestartet. Zwei Dinge sind dabei zu wissen:',
   'The plugin measures nothing itself — it queries <code>apcupsd</code>, the '
   'service that talks to the UPS. It is installed and started along with the '
-  'plugin. There are two pitfalls:'),
+  'plugin. There are two things to know:'),
  ('K05',
   'In <code>/etc/default/apcupsd</code> steht nach der Paketinstallation '
-  '<code>ISCONFIGURED=no</code>. Solange das so ist, startet apcupsd nicht. '
-  'Die Installation dieses Plugins setzt den Wert auf <code>yes</code> — das '
-  'ist die einzige Systemdatei, die angefasst wird.',
+  '<code>ISCONFIGURED=no</code>. Auf dem LoxBerry ist das ohne Folgen: apcupsd '
+  'startet über systemd, und dessen Unit liest diese Datei nicht (am Gerät '
+  'gemessen: <code>ISCONFIGURED=no</code>, und apcupsd läuft). Die Installation '
+  'versucht zwar, den Wert auf <code>yes</code> zu setzen, darf die Datei als '
+  '<code>loxberry</code> aber nicht schreiben und sagt das im Protokoll — eine '
+  'Systemdatei ändert das Plugin damit nicht. Nur wer apcupsd über das alte '
+  'init-Skript startet, setzt den Wert von Hand.',
   'After the package installation <code>/etc/default/apcupsd</code> contains '
-  '<code>ISCONFIGURED=no</code>. While that is the case apcupsd does not start. '
-  'Installing this plugin sets the value to <code>yes</code> — that is the only '
-  'system file it touches.'),
+  '<code>ISCONFIGURED=no</code>. On the LoxBerry this has no effect: apcupsd '
+  'starts via systemd, and its unit does not read this file (measured on the '
+  'device: <code>ISCONFIGURED=no</code>, and apcupsd is running). The '
+  'installation does try to set the value to <code>yes</code>, but as '
+  '<code>loxberry</code> it may not write the file and says so in the log — so '
+  'the plugin changes no system file. Only whoever starts apcupsd through the '
+  'old init script sets the value by hand.'),
  ('K06',
   'Die USV muss per USB angeschlossen und erkannt sein. Im Reiter <i>Test</i> '
   'zeigt <i>apcupsd prüfen</i> die angeschlossenen USB-Geräte.',
@@ -54,19 +71,28 @@ H = [
   '<b>Test tab → Query now.</b> If values arrive there, the hard part is done. '
   'The self-check above answers line by line what is still missing.'),
  ('K09',
-  '<b>Das Abo im MQTT-Gateway eintragen.</b> Ohne diesen Eintrag kommt am '
-  'Miniserver nichts an — das ist die häufigste Fehlerursache überhaupt. Das '
-  'einzutragende Thema steht im Reiter <i>MQTT</i> zum Abschreiben.',
-  '<b>Enter the subscription in the MQTT gateway.</b> Without this entry '
-  'nothing arrives at the Miniserver — this is the most common cause of failure '
-  'by far. The topic to enter is shown in the <i>MQTT</i> tab.'),
+  '<b>Das Abo im MQTT-Gateway prüfen.</b> Seit 1.2.14 trägt das Plugin es selbst '
+  'ein (Datei <i>mqtt_subscriptions.cfg</i>), das Gateway liest sie; auch nach '
+  'einem Wechsel des Themenpräfixes wird sie nachgeführt. Kommt am Miniserver '
+  'nichts an, zuerst unter <i>System → MQTT Gateway → Subscriptions</i> nachsehen, '
+  'ob die Themengruppe dort steht; sie steht im Reiter <i>MQTT</i> zum Vergleich.',
+  '<b>Check the subscription in the MQTT gateway.</b> Since 1.2.14 the plugin '
+  'enters it itself (file <i>mqtt_subscriptions.cfg</i>) and the gateway reads '
+  'it; it is also updated after a change of the topic prefix. If nothing arrives '
+  'at the Miniserver, first check under <i>System → MQTT Gateway → '
+  'Subscriptions</i> whether the topic group is listed; the <i>MQTT</i> tab shows '
+  'it for comparison.'),
  ('K10',
   '<b>Reiter Einbindung in Loxone → Vorlage herunterladen</b> und in Loxone '
-  'Config über <i>Vorlage einfügen</i> einlesen. Die vollständige '
-  'Baustein-Liste im selben Reiter zeigt, was danach zu verdrahten ist.',
+  'Config über <i>Vorlage einfügen</i> einlesen. Die zwei Baustein-Listen im '
+  'selben Reiter (Schritt 6) zeigen, was danach zu verdrahten ist – Zustand, '
+  'Störung und Stromausfall sowie Akku, Netz und Last –, je mit Bild und '
+  'Schritt-für-Schritt-Anleitung.',
   '<b>Loxone integration tab → download the template</b> and read it into '
-  'Loxone Config via <i>Insert template</i>. The complete list of blocks in the '
-  'same tab shows what to wire up afterwards.'),
+  'Loxone Config via <i>Insert template</i>. The two block lists in the same '
+  'tab (step 6) show what to wire up afterwards – state, faults and power '
+  'failure as well as battery, mains and load –, each with a picture and '
+  'step-by-step instructions.'),
  ('K11', 'Was veröffentlicht wird', 'What is published'),
  ('K12',
   'Die vollständige Liste mit Art, Einheit und Bedeutung steht im Reiter '
@@ -107,13 +133,21 @@ H = [
   'sie eingebunden hat, muss nichts ändern. Seit 1.2.0 beachtet sie auch die '
   'Einstellung <i>USV auf einem anderen Rechner</i> und liefert die '
   'abgeleiteten Werte im Block <code>CALC</code> mit, samt ihrem Alter in '
-  'Sekunden. Für neue Anlagen ist MQTT trotzdem der bessere Weg: der '
+  'Sekunden. Seit 1.2.14 stehen am Anfang des Blocks <code>OK</code> und '
+  '<code>ALTER</code>: <code>OK</code> fällt auf 0, sobald die Werte älter sind '
+  'als das Dreifache des Abfragetakts (etwa weil der Dienst steht), '
+  '<code>ALTER</code> nennt das Alter in Sekunden. Für neue Anlagen ist MQTT '
+  'trotzdem der bessere Weg: der '
   'Miniserver muss nichts abfragen, und es kommen deutlich mehr Größen heraus.',
   'The original version provided an XML page that Loxone fetches itself. That '
   'page still exists and returns the same structure — anyone who has wired it '
   'up need not change anything. Since 1.2.0 it also honours the setting <i>UPS '
   'on another machine</i> and includes the derived values in a <code>CALC</code> '
-  'block, together with their age in seconds. For new installations MQTT is '
+  'block, together with their age in seconds. Since 1.2.14 the block starts '
+  'with <code>OK</code> and <code>ALTER</code>: <code>OK</code> drops to 0 as '
+  'soon as the values are older than three times the query interval (for '
+  'instance because the service has stopped), <code>ALTER</code> gives the age '
+  'in seconds. For new installations MQTT is '
   'still the better path: the Miniserver has to query nothing, and considerably '
   'more values are available.'),
  ('K17', 'Benachrichtigungen', 'Notifications'),
@@ -203,10 +237,10 @@ H = [
  ('K33', 'Zustandstext, z.&nbsp;B. ONLINE oder ONBATT',
          'State text, for example ONLINE or ONBATT'),
  ('K34', '<code>alarm_level</code>', '<code>alarm_level</code>'),
- ('K35', '0 Netz, 1 Akku, 2 Vorwarnung, 3 Abschaltung läuft. Leer bei '
-         'abgerissener Verbindung',
-         '0 mains, 1 battery, 2 advance warning, 3 shutdown running. Empty when '
-         'the connection is lost'),
+ ('K35', '0 Netz, 1 Akku, 2 Vorwarnung, 3 Abschaltung läuft. Ein Strich (-) bei '
+         'abgerissener Verbindung oder wenn apcaccess nicht antwortet',
+         '0 mains, 1 battery, 2 advance warning, 3 shutdown running. A dash (-) '
+         'when the connection is lost or apcaccess does not answer'),
  ('K36', '<code>on_battery</code>', '<code>on_battery</code>'),
  ('K37', '1 = Netzausfall, die USV speist aus dem Akku',
          '1 = power failure, the UPS is running on battery'),
@@ -237,6 +271,27 @@ H = [
  ('K53', 'Kurztext beim Zustandswechsel', 'Short text on a state change'),
 ]
 
+# Gruppe 16 (1.2.23): K35/K49/K51/K53 neu gefasst (-1 statt leer/Strich, timestamp Bestand, event = letztes
+# Ereignis), K54-K61 neu (Sprachausgabe, Haus-Thema, Lebenszeichen/Fehlwerte, Zeile status/zaehler).
+_G16_H = [
+ ('K35', '0 Netz, 1 Akku, 2 Vorwarnung, 3 Abschaltung läuft; -1 = keine Aussage (apcupsd erreicht die USV nicht, antwortet nicht oder das Plugin ist ausgeschaltet)', '0 mains, 1 battery, 2 advance warning, 3 shutdown running; -1 = no statement (apcupsd cannot reach the UPS, does not answer or the plugin is switched off)'),
+ ('K49', 'Alter des Akkus in Monaten. -1, wenn das Datumsformat der USV zweideutig ist', 'Age of the battery in months. -1 if the date format of the UPS is ambiguous'),
+ ('K51', 'Sekunden seit 1970 zum Zeitpunkt der Messung — Bestand; für neue Projekte <code>status/zaehler</code>', 'Seconds since 1970 at the time of measurement — legacy; for new projects <code>status/zaehler</code>'),
+ ('K53', 'das letzte Ereignis (Stromausfall, Netz wieder da …) – bleibt stehen, bis ein neues kommt', 'the last event (power failure, power back …) – stays until a new one comes'),
+ ('K54', 'Sprachausgabe bei Stromausfall', 'Voice announcement on power failure'),
+ ('K55', 'Im Reiter <i>Einstellungen</i> lässt sich eine Ansage einschalten (gemeinsames Sprachmodul: Alexa NG, Chromecast, Music Server, Sonos4Lox, SonoX, eigene Adresse; ab Werk aus): bei Stromausfall, Rückkehr des Stroms, Vorwarnung und beginnender Abschaltung, die letzten beiden dringend. <b>Bei einem Stromausfall hängen Lautsprecher, Echo, Router und WLAN oft nicht an der USV</b> – dann kommt die Ansage nicht an. Die Benachrichtigungen bleiben der verlässliche Weg.', 'In the <i>Settings</i> tab an announcement can be switched on (shared voice module: Alexa NG, Chromecast, Music Server, Sonos4Lox, SonoX, own address; off by default): on power failure, return of power, advance warning and beginning shutdown, the last two urgent. <b>During a power failure, speakers, Echo, router and Wi-Fi are often not connected to the UPS</b> – then the announcement does not arrive. The notifications remain the reliable way.'),
+ ('K56', 'Stufe für andere Plugins', 'Level for other plugins'),
+ ('K57', 'Mit <i>Stufe an andere Plugins geben</i> (ab Werk aus) sendet das Plugin <code>haus/usv/stufe</code> (0–3, -1 ohne Aussage, zurückbehalten) und das Lebenszeichen <code>haus/usv/zaehler</code>. Nur eine USV im Haus darf das liefern; beim Ausschalten und bei der Deinstallation räumt das Plugin das Thema ab.', 'With <i>Pass the level on to other plugins</i> (off by default) the plugin sends <code>haus/usv/stufe</code> (0–3, -1 no statement, retained) and the heartbeat <code>haus/usv/zaehler</code>. Only one UPS in the house may provide it; when switched off and on uninstalling, the plugin removes the topic.'),
+ ('K58', 'Lebenszeichen und fehlende Werte', 'Heartbeat and missing values'),
+ ('K59', 'Fehlt ein Wert – apcaccess antwortet nicht, die Verbindung zur USV ist abgerissen (COMMLOST) oder das Plugin ist ausgeschaltet –, sendet das Plugin -1 (Temperatur -999, Texte „-“), nie nichts. <code>status/zaehler</code> zählt bei jedem Lauf eins weiter; in Loxone überwacht eine Analogwertvalidierung, ob er stehen bleibt. Die Eingänge legen Sie nach der Namenstabelle im Reiter <i>Einbindung in Loxone</i> an. Unter MQTT-Gateway V2 prüft der Reiter <i>Test</i> seit 1.2.24, ob alle Datenpunkte der Hakenliste angehakt sind und „Noncached“ stimmt.', 'If a value is missing – apcaccess does not answer, the connection to the UPS is lost (COMMLOST) or the plugin is switched off –, the plugin sends -1 (temperature -999, texts “-”), never nothing. <code>status/zaehler</code> counts up by one on every run; in Loxone an analog value validation watches whether it stops. Create the inputs according to the name table in the <i>Loxone integration</i> tab. Under MQTT gateway V2 the <i>Test</i> tab checks since 1.2.24 that all data points of the tick list are ticked and “Noncached” is right.'),
+ ('K60', '<code>status/zaehler</code>', '<code>status/zaehler</code>'),
+ ('K61', 'Lebenszeichen, 0 bis 999, je Lauf eins weiter', 'Heartbeat, 0 to 999, one up per run'),
+ ('K62', '<b>Mehrere Lautsprecher gleichzeitig</b> (seit 1.2.24, Sprachmodul 1.2.1): Unter der Ausgabeart (jetzt „Ziel 1“) steht die Tabelle <i>Weitere Ausgabeziele (gleichzeitig)</i> – bis zu 6 Ziele insgesamt, zum Beispiel Loxone Music Server, Google-Lautsprecher (Chromecast 4 Lox NG) und Amazon Echo (Alexa-NG). Jede Ansage geht gleichzeitig an Ziel 1 und an jedes eingeschaltete Ziel der Tabelle; scheitert eines, sprechen die anderen trotzdem, und die Ansage gilt als gesendet, sobald eines gesprochen hat (Protokoll und Reiter Test nennen jedes Ziel). Ist Ziel 1 aus, spricht keines; mit dem Original-Audioserver als Ziel 1 gehen keine weiteren Ziele. Neues Ziel: die leere Zeile ausfüllen und speichern. Mehrere Zonen desselben Music Servers bzw. mehrere Echos gehören in EIN Ziel (Zonenliste, Kommaliste, gruppe:&lt;Name&gt;). Das Sprechtoken steht einmal oben und gilt für alle Ziele dieser Art. Im Reiter Test spricht <i>Testansage</i> an alle Ziele, <i>Testansage an Ziel n</i> nur an dieses. Vor einem Zurückgehen auf eine Fassung vor 1.2.24 die weiteren Ziele entfernen – ältere Fassungen kennen die Liste nicht und fielen beim Laden auf die Werkseinstellung der Sprachausgabe zurück.', '<b>Several speakers at once</b> (since 1.2.24, speech module 1.2.1): below the output type (now “target 1”) the table <i>Further outputs (simultaneous)</i> takes up to 6 targets in total, for example Loxone Music Server, Google speakers (Chromecast 4 Lox NG) and Amazon Echo (Alexa-NG). Every announcement goes to target 1 and to every enabled target of the table at the same time; if one fails the others still speak, and the announcement counts as sent as soon as one has spoken (the log and the Test tab name every target). If target 1 is off, none speaks; the original Audio Server as target 1 cannot be combined with further targets. New target: fill in the empty row and save. Several zones of the same Music Server or several Echos belong in ONE target (zone list, comma list, gruppe:&lt;name&gt;). The speech token is entered once above and applies to all targets of that kind. In the Test tab <i>Test announcement</i> speaks to all targets, <i>Test announcement to target n</i> only to that one. Before going back to a version older than 1.2.24 remove the further targets – older versions do not know the list and would fall back to the factory settings of the speech output.'),
+]
+_G16_HD = {k: (de, en) for k, de, en in _G16_H}
+H = [(k,) + _G16_HD.pop(k) if k in _G16_HD else (k, de, en) for k, de, en in H]
+H += [z for z in _G16_H if z[0] in _G16_HD]
+
 KOPF_DE = [
  '; Hilfetexte, deutsch. Gehoert zu templates/help/help.html.',
  ';',
@@ -260,14 +315,15 @@ def bau(idx):
     return '\n'.join(zeilen) + '\n'
 
 
+# Erst pruefen, dann schreiben (06.11.2026): bis dahin standen die Dateien schon
+# auf der Platte, wenn die Pruefung danach Verstoesse meldete (Rueckgabe 1).
 fehl = 0
+texte = {}
 for i, sp in enumerate(('de', 'en')):
     text = bau(i)
-    pfad = os.path.join(ZIEL, 'help_%s.ini' % sp)
-    with io.open(pfad, 'wb') as fh:
-        fh.write(text.encode('utf-8'))
+    texte[sp] = text
     n = len([z for z in text.split('\n') if ' = "' in z])
-    print('%s  %d Wertzeilen' % (pfad, n))
+    print('help_%s.ini  %d Wertzeilen' % (sp, n))
     for j, z in enumerate(text.split('\n'), 1):
         if ' = "' not in z:
             continue
@@ -294,4 +350,12 @@ else:
     print('  FEHL: help.html nicht gefunden'); fehl += 1
 
 print('Verstoesse: %d' % fehl)
-sys.exit(1 if fehl else 0)
+if fehl:
+    print('Es wurde NICHTS geschrieben.')
+    sys.exit(1)
+for sp in ('de', 'en'):
+    pfad = os.path.join(ZIEL, 'help_%s.ini' % sp)
+    with io.open(pfad, 'wb') as fh:
+        fh.write(texte[sp].encode('utf-8'))
+    print('Geschrieben: %s' % pfad)
+sys.exit(0)

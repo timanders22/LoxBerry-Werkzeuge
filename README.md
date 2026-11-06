@@ -35,9 +35,14 @@ dass er gefunden wird.
 | `tote_helfer.py` | Funktionen ohne Aufruf — auch aus Skripten heraus gesucht, nicht nur aus PHP |
 | `sprachschluessel_pruefen.py`, `ini_pruefen.py` | Sind Deutsch und Englisch gleichstaendig? |
 | `wachposten_pruefen.py` | Ist jeder POST durch ein Formularmerkmal gedeckt? |
-| `freigabepruefung.py` | Steht ein Geheimnis, eine MAC, eine Netzadresse im Paket? |
+| `freigabe_pruefen.py` | Alles, was vor einer Veröffentlichung zu prüfen ist, in einem Aufruf — auch: steht ein Geheimnis, eine MAC, eine Netzadresse im Paket? |
 | `zeilenenden_vergleichen.py` | Hat eine Datei ihren Zeilenendstil verloren? |
 | `linie_veroeffentlichen.sh` | Die vorgeschriebene Reihenfolge in einem Aufruf |
+| `stand_sichern.py` | Lokaler Versionsstand des Arbeitsordners: sichern, Lage, Verlauf, Datei aus einem Stand daneben legen — nie überschreiben, kein Remote |
+| `geraet_abbild.py` | Wie sieht der LoxBerry wirklich aus? Rechte, Pfade, Fassungen, Dienste über SSH — ohne Zugangsdaten |
+| `geraetestand_vergleichen.py` | Trägt das Gerät wirklich den Inhalt seines Tags - oder nur dessen Nummer? Vergleicht die installierten Dateien byteweise mit dem Tag-Archiv der **installierten** Fassung. Zeilenenden und ersetzte Platzhalter zählen nicht als Befund, alles andere schon |
+| `loxberry_zugang_einrichten.sh` | Einmalig auf dem LoxBerry: Benutzer `claude` mit Schlüssel und drei `sudo`-Rechten |
+| `schreibwaechter.py` | Claude-Code-Hook: darf dieser Schreibvorgang überhaupt stattfinden? Lehnt Schreiben ins Archiv und stilles Kürzen ab |
 
 ## Attrappen
 
@@ -47,8 +52,55 @@ Verhalten nach — sie sorgen nur dafür, dass die Syntaxprüfung nicht an einem
 fehlenden Modul scheitert und dabei aussieht wie ein Fehler des Plugins.
 Näheres in `perl_attrappe/LIESMICH.md`.
 
+Seit dem 07.09.2026 ruft `freigabe_pruefen.py` sie selbst auf (Prüfung
+*Perl-Syntax*). Anlass: eine Attrappe, die **nachsichtiger** war als das
+Original, hat einen echten Fehler acht Fassungen lang verdeckt — sie bildete
+weder das `use JSON;` von `LoxBerry::JSON` noch die Prototypen `($)` nach.
+Nachsichtig sein darf eine Attrappe bei der Umgebung, nie bei der
+Schnittstelle.
+
 `lb_attrappe/` und `lb_leer/` sind zwei winzige LoxBerry-Bäume für den
 Prüfstand. Ihre Zugangsdaten sind Attrappen (`geheim123`).
+
+## Seit September dazugekommen
+
+**Gemeinsame Bausteine (`gemeinsam/`).** Ein LoxBerry-Plugin kann keine Datei
+eines anderen Plugins laden. Was mehrere Plugins brauchen — die Sprachausgabe
+(`sprachausgabe.php` mit `sprachausgabe_texte.json`), der Planer, die
+Befehlsbrücke —, liegt deshalb als Stammfassung hier und als byteweise gleiche
+Abschrift in jedem Plugin. `gemeinsam_pruefen.py` meldet jede Abschrift, die
+von der Stammfassung abweicht; `mutation_sprachausgabe.py` und
+`mutation_planer.py` bauen absichtlich Fehler ein und zeigen, dass die
+Selbsttests sie finden.
+
+**Sprachdateien.** Die `*_sprache_erzeugen.py` schreiben die Sprachdateien
+(`de`/`en`) der Plugins aus einer Quelle; am 06.11.2026 wurden alle an die
+veröffentlichten Sprachdateien angeglichen, `ap_sprache_erzeugen.py` und
+`ap_hilfe_erzeugen.py` prüfen vor dem Schreiben. `sprachwache.py` passt auf,
+dass ein Erzeuger keinen Schlüssel verliert, den die Datei schon führt;
+`sprachabbild.py` hält das Schlüssel-Wert-Abbild einer Sprachablage fest und
+vergleicht dagegen; `sprachplatzhalter_pruefen.py` zählt, ob Text und
+Aufrufstelle dieselbe Zahl von Platzhaltern meinen.
+
+**Minutenlauf.** `minutenlauf_pruefen.py` startet die Cron-Dienste der Plugins
+gegen eine LoxBerry-Attrappe mit Broker-Attrappe (`minutenlauf_broker.py`)
+und sieht nach, was sie veröffentlichen. Die Angaben je Plugin stehen in
+`minutenlauf_linien.json`. Die Prüfstand-Skripte erwarten einen Ordner
+`minutenlauf_sdk/` mit den PHP-Bibliotheken eines LoxBerry
+(`libs/phplib`); er liegt hier nicht bei und wird von einem eigenen Gerät
+kopiert.
+
+**Seiten und Formulare.** `seitenvergleich.py` vergleicht die gerenderte
+Oberfläche zweier Fassungen, `wachposten_wirkung.py` schickt Formulare mit
+und ohne Formularmerkmal ab und sieht nach, ob der Wachposten wirkt.
+`netzsperre.py` sperrt Prüfwerkzeugen, die mit echten Bibliotheken arbeiten,
+den Weg ins Netz, damit kein Prüflauf eine Anmeldung bei einem Cloud-Dienst
+auslöst.
+
+**Gerät.** `geraet_abbild.py` und `geraetestand_vergleichen.py` lesen über
+SSH; sie erwarten einen eingerichteten SSH-Zugang (Vorgabe: Host
+`loxberry-claude`), den `loxberry_zugang_einrichten.sh` auf dem LoxBerry
+anlegt.
 
 ## Was hier **nicht** liegt
 
@@ -61,6 +113,9 @@ Ebenso `anonymisierung_woerter.txt`: die Liste der Wörter, die in keiner
 Veröffentlichung stehen dürfen. Eine solche Liste im Quelltext trüge genau den
 Namen in jede Veröffentlichung, vor dem sie schützen soll. Vorlage:
 `anonymisierung_woerter.beispiel.txt`.
+
+Ebenso nicht: Werkzeuge, die an Projektdatei, Räume oder Netz einer
+bestimmten Anlage gebunden sind, und fremde Bibliotheken.
 
 ## Aufruf
 

@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-# Zehnteilige Pruefkette aus REGELN_3 A2, lesend.
+# Elfteilige Pruefkette aus REGELN_3 A2, lesend.
+# Punkt 11 kam am 27.08.2026 dazu: Config fuehrt am Document ein NumO mit,
+# das die <C>-Bausteine zaehlt. Ein Skript, das Bausteine einfuegt, muss es
+# mitziehen - sonst steht im Kopf eine andere Zahl als im Rumpf. Am Bestand
+# geeicht: in allen 100 aus Config gespeicherten Fassungen stimmt NumO, in
+# allen 61 skriptgebauten stand es still. Ob der Miniserver die Zahl liest,
+# ist NICHT gemessen; die Pruefung haelt die Datei in sich stimmig.
 # Punkt 10 kam am 20.08.2026 dazu (A5c): einen von Config verworfenen
 # Baustein erkennt man an der Null-UUID. Punkt 5 findet ihn NICHT - die
 # Null-UUID ist formal gueltig, und solange es nur eine gibt, ist sie auch
@@ -86,6 +92,13 @@ verworfen = [i + 1 for i, l in enumerate(L)
 sag(10, "verworfene Bausteine (Null-UUID): %d%s" % (
         len(verworfen), (" in Zeile " + ", ".join(map(str, verworfen[:5]))) if verworfen else ""),
     not verworfen)
+mNumO = re.search(chr(60) + 'C Type="Document"[^>]*\\bNumO="(\\d+)"', s)
+anzahlC = len(re.findall(chr(60) + "C[ " + chr(62) + "]", s))
+if mNumO is None:
+    sag(11, "NumO am Document fehlt", False)
+else:
+    sag(11, "NumO=%s  Bausteine=%d" % (mNumO.group(1), anzahlC),
+        int(mNumO.group(1)) == anzahlC)
 print()
-print("ERGEBNIS:", "alle zehn Punkte bestanden" if ok else "NICHT BESTANDEN")
+print("ERGEBNIS:", "alle elf Punkte bestanden" if ok else "NICHT BESTANDEN")
 sys.exit(0 if ok else 1)

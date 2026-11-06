@@ -233,9 +233,14 @@ pruefe("ST Restzeit Vergangenheit -> 0", ww.st_restzeit("2020-01-01T00:00:00Z"),
 # ===========================================================================
 # Geraetewahl
 # ===========================================================================
+# Seit 0.9.7 waehlt geraet_waehlen() ueber die feste Nummer aus
+# geraetenummern.json, die nummern_zuordnen() an jedes Geraet haengt - nicht
+# mehr ueber die Position in der Liste. Die Nummern setzt der Test wie der Dienst.
+A["nummer"], M["nummer"], S["nummer"] = 1, 2, 3
 liste = [A, M, S]
 pruefe("Wahl per Nummer 1", ww.geraet_waehlen(liste, "1") is A, True)
 pruefe("Wahl per Nummer 3", ww.geraet_waehlen(liste, 3) is S, True)
+pruefe("Wahl folgt der Nummer, nicht der Position", ww.geraet_waehlen([S, A, M], "1") is A, True)
 pruefe("Wahl per Kennung", ww.geraet_waehlen(liste, "abc-123") is S, True)
 pruefe("Wahl per Kennung gross", ww.geraet_waehlen(liste, "ABC-123") is S, True)
 pruefe("Wahl zu gross", ww.geraet_waehlen(liste, "9"), None)

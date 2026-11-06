@@ -97,18 +97,47 @@ def pruefe(o):
     kandidaten = sorted(set(k for k in TOKEN.findall(vorgaben)
                             if not FORMTOKEN.search(k)))
     if kandidaten:
-        m2 = re.search(r'function\s+\w+_(?:konfig_ausfuhr|sicherung\w*|export\w*|'
-                       r'backup\w*|ausfuhr\w*)\s*\(.*?\n\}', ganz, re.S)
-        ausfuhr = m2.group(0) if m2 else ''
+        # BERICHTIGT 04.09.2026 (Anlass: Intercom 2.2.6).
+        #
+        # Bis hierher nahm dieser Abschnitt die ERSTE Funktion, deren NAME auf
+        # das Muster passt. Bei Intercom traf das ic_sicherungsschluessel() -
+        # eine blosse Schluesselliste - und meldete "die Sicherung baut nicht
+        # auf der vollen Konfiguration auf", obwohl die Ausfuhr in Ordnung war
+        # (ueber HTTP nachgemessen: die Datei traegt den Aktionstoken und
+        # keinen Formulartoken).
+        #
+        # Eine Funktion ist erst dann eine Ausfuhr, wenn sie auch etwas
+        # AUSGIBT. Findet sich keine solche, ist die Frage hier NICHT MESSBAR -
+        # der dritte Ausgang, weder Haken noch Kreuz. Bei Intercom steht die
+        # Ausfuhr inline im Handler von index.php; dieses Werkzeug sieht sie
+        # nicht, und es soll dann schweigen statt zu raten.
+        #
+        # Ueber den Bestand gemessen (128 Ordner): genau eine Zeile aendert
+        # sich, die von Intercom.
+        treffer = [m2.group(0) for m2 in re.finditer(
+            r'function\s+\w+_(?:konfig_ausfuhr|sicherung\w*|export\w*|'
+            r'backup\w*|ausfuhr\w*)\s*\(.*?\n\}', ganz, re.S)]
+        gibt_aus = [k for k in treffer
+                    if 'json_encode' in k or 'Content-Disposition' in k]
+        ausfuhr = gibt_aus[0] if gibt_aus else ''
         if ausfuhr:
             # Baut sie auf der GANZEN Konfiguration auf? Dann ist der Token drin.
             if not re.search(r'_vorgaben\(\)|_config\(\)|\$cfg\b|_konfig\(\)', ausfuhr):
                 maengel.append('die Sicherung baut nicht auf der vollen Konfiguration auf')
             if FORMTOKEN.search(ausfuhr):
                 maengel.append('der FORMULARtoken steht in der Sicherung')
+        elif treffer:
+            hinweise.append('keine der namensgleichen Funktionen gibt etwas aus - '
+                            'die Ausfuhr steht wohl inline; NICHT geprueft')
         else:
             hinweise.append('Ausfuhrfunktion nicht eindeutig - von Hand ansehen')
         hinweise.append('Token: ' + ', '.join(kandidaten[:4]))
+    else:
+        # Kein *_vorgaben(): dieser Abschnitt hat dann NICHTS gemessen. Bis
+        # 04.09.2026 sah das aus wie ein Haken - Intercom stand vier
+        # Fassungen lang so da, ohne dass der Token je geprueft wurde.
+        hinweise.append('keine Vorgabenfunktion gefunden - Token in der '
+                        'Sicherung NICHT geprueft')
     return ('da', maengel, hinweise)
 
 

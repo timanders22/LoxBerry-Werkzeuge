@@ -29,7 +29,7 @@ import tempfile
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 HIER = os.path.dirname(os.path.abspath(__file__))
 ARBEIT = os.path.dirname(HIER)
-PHP = next((p for p in (r'C:\tmp\php-8.4.24-Win32-vs17-x64\php.exe',
+PHP = next((p for p in (r'C:\tmp\php-8.4.27-Win32-vs17-x64\php.exe',
                         r'C:\tmp\php-7.4.33-Win32-vc15-x64\php.exe', 'php')
             if p == 'php' or os.path.isfile(p)), 'php')
 

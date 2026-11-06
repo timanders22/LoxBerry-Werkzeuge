@@ -1,0 +1,184 @@
+# Deutsche Bausteinnamen aus dem Loxone-Verzeichnis
+# https://www.loxone.com/dede/kb-cat/config-functionblock/ , abgerufen 30.08.2026
+# Eine Zeile je Name. Dient als ZWEITER Beleg: nur wenn der Titel eines frisch
+# angelegten Bausteins hier vorkommt, ist er der deutsche Bausteinname und
+# nicht bloss ein Raum- oder Geraetename.
+2 Auswahltasten
+2 Tasten
+2-Punkt-Regler
+3-Punkt-Regler
+AAL Smart Alarm
+Ablaufsteuerung
+Addierer
+Addierer 4
+Alarmanlage
+Alarmanlage Zentral
+Alarmierungskette
+Analog MinMax-Begrenzer
+Analogkomparator
+Analogspeicher
+Analogwahlschalter
+Analogwahlschalter 4-fach
+Analogwertvalidierung
+Analogwertüberwachung
+App
+Audio Player
+Audio Player Gruppe fix
+Audio Zentral
+Auf/Abwärts-Zähler
+Aufwärtszähler
+Ausschaltverzögerung
+Auswahltaste
+Automatik-Regel
+Automatikbeschattung
+Automatikbeschattung Integriert
+Automatikbeschattung Zentral
+BACnet
+Befehlserkennung
+Benachrichtigung
+Berechtigung
+Berechtigung NFC Code Touch
+Betriebszeitzähler
+Bewässerung
+Binärdecoder
+Binärdekoder
+Binärkodierer
+Brand- und Wassermeldezentrale
+Call Generator
+Composite-Fensterkontakt
+Dachfenster Beschattung
+Differenzschwellwertschalter
+Dimmer
+Dividierer
+EIB Beschattung
+EIB Dimmer
+EIB-Taster
+Ein- und Ausschaltverzögerung
+Einschaltverzögerung
+Einschaltverzögerung speichernd
+Energieflussmonitor
+Energiemanager
+Energiemanager Gen. 1
+Energiemonitor
+Event Database Connector
+Exklusiv ODER
+Fan Coil Frischluft Steuerung
+Fan Coil Steuerung
+Fan Coil Zentralsteuerung
+Fenster
+Fenster Zentral
+Fenster- und Türüberwachung
+Festwertzähler
+Flankenerkennung
+Flankengetriggertes Wischrelais
+Formel
+Ganzzahl
+Gleich
+Gleitender Mittelwert
+Größer oder gleich
+HVAC Controller
+Heiz- und Kühlsteuerung
+Heizkurve
+Heizungsmischer
+Home Connect
+Hotel Lichtsteuerung
+IR Steuerung
+Impuls bei
+Impuls um
+Impulsgeber
+Impulszähler
+Impulszähler & Speicher
+Impulszähler Bidirektional
+Intelligente Raumregelung
+Internorm Lüfter
+Kleiner oder gleich
+Klimaanlagen Zentralsteuerung
+Klimaanlagensteuerung
+Komfortschalter
+Konstantlichtregler
+Langzeitklick
+Lastmanager
+Leaf Lüfter
+Licht Zentral
+Lichtsteuerung
+Mail Generator
+Mediensteuerung
+Mehrfachklick
+Merker
+MinMax
+MinMax seit Reset
+Miniserver Shortcut
+Mittelwert
+Modulo
+Monoflop
+Multiplikator Projekt
+Multiplizierer
+Music Server Zone
+Netzwerk Interkommunikation
+Nicht
+Notfall Alarm
+Oder
+PI – Regler
+PID – Regler
+PV Produktionsvorhersage
+Ping
+Poolsteuerung
+Post- und Paketkasten
+Power Supply & Backup (Baustein)
+Programm (Baustein)
+Präsenz
+Pulsweitenmodulator
+RGB Lichtszene
+RS-Impulsschalter
+Radiotasten
+Radiotasten 16 Eingänge
+Rampensteuerung
+Raumlüftungssteuerung
+SIA DC-09
+SR-Impulsschalter
+Saunasteuerung
+Saunasteuerung mit Verdampfer
+Schalter
+Schaltuhr
+Schieberegister
+Schwellwertschalter
+Sequenzer
+Session Database Connector
+Skalierer
+Solarregelung
+Spotpreis-Optimierer
+Sprechanlage
+Status
+Status Monitor
+Stepper
+Subtrahierer
+Szene
+Tablet
+Taster
+Tastschalter
+Taupunktrechner
+Text Generator
+Tor
+Tor Zentral
+Touch & Grill Baustein
+Touch Pure Flex Controller
+Treppenlicht-Schalter
+Trust
+Türsteuerung
+Und
+Ungleich
+Verzögerter Impuls
+Virtueller Status
+Vorlauftemperatur Rechner
+WC-Lüftungssteuerung
+Wallbox
+Wallbox Gen. 1
+Wallbox Manager
+Webpage
+Wecker
+Windmesser
+Zufallsgenerator
+Zufallssteuerung
+Zähler
+Zähler & Speicher
+Zähler Bidirektional

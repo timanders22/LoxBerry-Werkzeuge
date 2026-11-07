@@ -414,10 +414,14 @@ else:
 # "entfaellt" - mit ok=True, also als bestandene Pruefung. Gesucht wird
 # jetzt nach der SACHE: eine Datei unter bin/, die '--selbsttest' selbst
 # auswertet.
-def _selbsttest_suchen(wurzel):
+def _selbsttest_suchen(wurzel, alle=False):
+    # alle=True (seit 08.11.2026): JEDE Datei, die --selbsttest annimmt, als
+    # Liste. Ohne Schalter wie bisher die erste - so liest es auch
+    # selbsttest_bestand.py, das diese Funktion aus dem Quelltext loest.
+    treffer = []
     bindir = os.path.join(wurzel, 'bin')
     if not os.path.isdir(bindir):
-        return None
+        return treffer if alle else None
     for name in sorted(os.listdir(bindir)):
         p = os.path.join(bindir, name)
         if not os.path.isfile(p):
@@ -449,61 +453,165 @@ def _selbsttest_suchen(wurzel):
             # legt der Selbsttestlauf ihn an, und die Hausstandard-Pruefung
             # meldet ihn danach als Muell - das Tor fiel ueber den eigenen
             # Rueckstand (gemessen 05.09.2026 an Dashboard 0.9.14).
-            return [PY, '-B', p]
-        if name.endswith('.php') or "env php" in t[:200]:
+            befehl = [PY, '-B', p]
+        elif name.endswith('.php') or "env php" in t[:200]:
             if 'argv' not in t:
                 continue
-            return [PHP_FASSUNGEN[0][1], p] if PHP_FASSUNGEN else None
-        if name.endswith('.sh') or t.startswith('#!'):
+            befehl = [PHP_FASSUNGEN[0][1], p] if PHP_FASSUNGEN else None
+        elif name.endswith('.sh') or t.startswith('#!'):
             # Ein Skript nimmt den Schalter nur an, wenn es ihn als Marke
             # fuehrt: `--selbsttest)` in einem case oder in Anfuehrungszeichen
             # in einem Vergleich. Ein blosses `prog --selbsttest` in einer
             # Befehlszeile ist Weitergabe, keine Annahme.
-            if ('--selbsttest)' not in t and '"--selbsttest"' not in t
-                    and "'--selbsttest'" not in t):
+            # Nur im CODE, nicht in Kommentarzeilen: BatterieBMS 0.9.45
+            # bin/dienst.sh nennt "(--einmal, --selbsttest)" in einem
+            # Kommentar und wurde dadurch als Selbsttest gewaehlt (08.11.2026).
+            t_code = '\n'.join(z for z in t.split('\n')
+                               if not z.lstrip().startswith('#'))
+            if ('--selbsttest)' not in t_code and '"--selbsttest"' not in t_code
+                    and "'--selbsttest'" not in t_code):
                 continue
-            return ['bash', p]
-    return None
+            # Git Bash unter Windows findet "C:\...\bin\x.sh" nicht - der
+            # gemischte Pfad endete mit Rueckgabe 127 (gemessen 08.11.2026 an
+            # BatterieBMS, Bewaesserung, BLE-Scanner). Mit Schraegstrichen
+            # geht er; unter Linux aendert das nichts.
+            befehl = ['bash', p.replace(os.sep, '/')]
+        else:
+            continue
+        if not alle:
+            return befehl
+        if befehl:
+            treffer.append(befehl)
+    return treffer if alle else None
 
 
-dienst = _selbsttest_suchen(ORDNER)
-if dienst:
-    r = subprocess.run(dienst + ['--selbsttest'], capture_output=True, text=True)
-    m = re.search(r'(\d+) Faelle geprueft, (\d+) Fehlschl', r.stdout)
-    marken = re.findall(r'^\[(OK|FEHL|INFO)\]', r.stdout, re.M)
-    # Laeuft hier ueberhaupt ein LoxBerry? Die Marken-Form misst die
-    # EINRICHTUNG, nicht den Quelltext - ohne LBHOMEDIR und ohne
-    # config/plugins/<name> meldet sie zwangslaeufig Fehler, und keiner
-    # davon ist einer. Gemessen wird das an der Umgebung, nicht geraten.
-    lbhome = os.environ.get('LBHOMEDIR', '')
-    # Und die Umgebung muss ein GERAET sein, nicht der Bau-Rechner.
+dienste = _selbsttest_suchen(ORDNER, alle=True)
+# SEIT 08.11.2026: JEDE Datei, die --selbsttest annimmt, und jede in einer
+# LoxBerry-Umgebung.
+#
+# Bis dahin lief nur die ALPHABETISCH ERSTE. In 44 von 59 Linien ist das die
+# gemeinsame bin/befehlsbruecke.php - und deren Selbsttest meldet in jeder
+# Linie dasselbe "122 Faelle, 0 Fehlschlaege". Der eigene Selbsttest des
+# Plugins lief nie. Gemessen 08.11.2026: Renault-NG 2.1.30 (veroeffentlicht)
+# meldet in rn_selbsttest.php 158 Faelle, 1 Fehlschlag - das Tor zeigte gruen.
+#
+# Und die Umgebung: seit Spotpreis-Tibber 0.9.18 steht in tb_cron.php die
+# Pruefung auf eine LoxBerry-Wurzel VOR dem Selbsttest (Regeln/06: nichts
+# schreiben ohne Wurzel). Ohne LBHOMEDIR endet der Lauf mit Rueckgabe 1 und
+# einer Meldung - "keine auswertbare Ausgabe", ein Kreuz ohne Befund. Mit
+# einer frischen Kopie von lb_attrappe/ meldet derselbe Selbsttest 21 Faelle,
+# 0 Fehlschlaege. Jeder Lauf bekommt deshalb seine EIGENE Kopie im
+# Systemtemp: geschrieben wird dort, nie in die geteilte Attrappe Werkzeuge/lb
+# und nie in den Pruefling (Arbeitsverzeichnis ist die Kopie).
+#
+# Auf einem eingerichteten LoxBerry (lb_da, unten) bleibt alles wie bisher:
+# dort laeuft der Selbsttest in der echten Umgebung.
+#
+# Das Urteil ist das SCHLECHTESTE der Einzelurteile (Kreuz vor Strich vor
+# Haken); die Zeile nennt jedes.
+import shutil
+import tempfile
+lbhome = os.environ.get('LBHOMEDIR', '')
+# Laeuft hier ueberhaupt ein LoxBerry? Die Marken-Form misst die
+# EINRICHTUNG, nicht den Quelltext - ohne eingerichtete Anlage meldet sie
+# zwangslaeufig Fehler, und keiner davon ist einer.
+#
+# Bis zum 03.09.2026 genuegte "LBHOMEDIR gesetzt und config/system da".
+# Beides trifft auf die Attrappe unter Werkzeuge/lb zu - sie sieht aus
+# wie ein LoxBerry. Sie ist aber keine eingerichtete Anlage: es gibt
+# keine virtuelle Python-Umgebung, kein Konto, keine Zugangsdatei. Eine
+# Einrichtungspruefung meldet dort zwangslaeufig Fehler, und keiner davon
+# ist einer des Plugins. Gemessen an VolkswagenID 0.9.12: sieben [FEHL],
+# alle aus der Umgebung.
+#
+# Der LoxBerry ist ein Debian. Laeuft die Freigabepruefung unter Windows,
+# misst die Marken-Form nichts, was ueber das Plugin aussagt.
+lb_da = (bool(lbhome) and os.path.isdir(os.path.join(lbhome, 'config', 'system'))
+         and os.name != 'nt')
+_st_ordner = PLUGIN_KENNUNG[2] or PLUGIN_KENNUNG[1]
+_st_urteile = []
+for dienst in dienste:
+    # ABSOLUT, bevor das Arbeitsverzeichnis wechselt: ORDNER kommt meist
+    # relativ ("LoxBerry-Plugin-X-1.0.0"), und mit cwd in der Kopie fand
+    # php die Datei nicht mehr (erster Eichlauf 08.11.2026: fuenf von fuenf
+    # Linien "Could not open input file").
+    dienst = dienst[:-1] + [os.path.abspath(dienst[-1]).replace(os.sep, '/')
+                            if dienst[0] == 'bash' else os.path.abspath(dienst[-1])]
+    # Unter Windows sucht CreateProcess ZUERST in System32 - dort liegt das
+    # bash der WSL, das keine C:/-Pfade kennt (Rueckgabe 127, 08.11.2026).
+    # Gemeint ist Git Bash vom PATH.
     #
-    # Bis zum 03.09.2026 genuegte "LBHOMEDIR gesetzt und config/system da".
-    # Beides trifft auf die Attrappe unter Werkzeuge/lb zu - sie sieht aus
-    # wie ein LoxBerry. Sie ist aber keine eingerichtete Anlage: es gibt
-    # keine virtuelle Python-Umgebung, kein Konto, keine Zugangsdatei. Eine
-    # Einrichtungspruefung meldet dort zwangslaeufig Fehler, und keiner davon
-    # ist einer des Plugins. Gemessen an VolkswagenID 0.9.12: sieben [FEHL],
-    # alle aus der Umgebung.
-    #
-    # Der LoxBerry ist ein Debian. Laeuft die Freigabepruefung unter Windows,
-    # misst die Marken-Form nichts, was ueber das Plugin aussagt.
-    lb_da = (bool(lbhome) and os.path.isdir(os.path.join(lbhome, 'config', 'system'))
-             and os.name != 'nt')
-    if m:
-        melde('Selbsttest', m.group(2) == '0', '%s Faelle, %s Fehlschlaege' % m.groups())
+    # Und das Urteil eines Skript-Selbsttests unter Windows ist ein STRICH,
+    # wie die Marken-Form: Git Bash ist kein Debian. Gemessen 08.11.2026 an
+    # BLE-Scanner 1.3.36, bl_haken.sh: 13 Faelle, 2 Fehlschlaege - beide in
+    # der Prozesssuche (bl_dienste_finden), die es unter Git Bash nicht gibt.
+    # Liefert das Skript GAR KEINE der Formen, bleibt es ein Kreuz.
+    _st_skript_win = dienst[0] == 'bash' and os.name == 'nt' and not lb_da
+    if dienst[0] == 'bash' and os.name == 'nt':
+        dienst = [shutil.which('bash') or 'bash'] + dienst[1:]
+    _st_name = os.path.basename(dienst[-1])
+    _st_tmp = None
+    if lb_da:
+        _st_umg = None
+        _st_cwd = None
+    else:
+        _st_tmp = tempfile.mkdtemp(prefix='freigabe_selbsttest_')
+        _st_lb = os.path.join(_st_tmp, 'lb')
+        shutil.copytree(os.path.join(HIER, 'lb_attrappe'), _st_lb)
+        _st_umg = dict(os.environ, LBHOMEDIR=_st_lb, LBPPLUGINDIR=_st_ordner,
+                       LBPCONFIGDIR=os.path.join(_st_lb, 'config', 'plugins', _st_ordner),
+                       LBPDATADIR=os.path.join(_st_lb, 'data', 'plugins', _st_ordner),
+                       LBPLOGDIR=os.path.join(_st_lb, 'log', 'plugins', _st_ordner))
+        _st_cwd = _st_tmp
+    try:
+        r = subprocess.run(dienst + ['--selbsttest'], capture_output=True, text=True,
+                           encoding='utf-8', errors='replace', env=_st_umg,
+                           cwd=_st_cwd, timeout=300)
+        _st_aus, _st_rc = r.stdout, r.returncode
+    except subprocess.TimeoutExpired:
+        _st_aus, _st_rc = None, None
+    finally:
+        if _st_tmp:
+            shutil.rmtree(_st_tmp, ignore_errors=True)
+    if _st_aus is None:
+        _st_urteile.append((False, '%s: Zeitueberschreitung (300 s)' % _st_name))
+        continue
+    m = re.search(r'(\d+) Faelle geprueft, (\d+) Fehlschl', _st_aus)
+    # Dritte Form (08.11.2026): "SELBSTTEST gut/schlecht" als eigene Zeile,
+    # Chromecast4lox seit 1.3.25. Bis dahin lief sie nie, weil davor die
+    # Befehlsbruecke gewaehlt wurde.
+    m3 = re.search(r'^SELBSTTEST (\d+)/(\d+)\s*$', _st_aus, re.M)
+    marken = re.findall(r'^\[(OK|FEHL|INFO)\]', _st_aus, re.M)
+    if m and _st_skript_win:
+        _st_urteile.append((None, '%s: %s Faelle, %s Fehlschlaege - Skript unter '
+                            'Git Bash, nicht auf Debian gemessen'
+                            % ((_st_name,) + m.groups())))
+    elif m:
+        _st_urteile.append((m.group(2) == '0', '%s: %s Faelle, %s Fehlschlaege'
+                            % ((_st_name,) + m.groups())))
+    elif m3:
+        _st_urteile.append((m3.group(2) == '0' and _st_rc == 0,
+                            '%s: %s gut, %s schlecht, Rueckgabe %d'
+                            % ((_st_name,) + m3.groups() + (_st_rc,))))
     elif marken and not lb_da:
-        fehl = marken.count('FEHL')
-        melde('Selbsttest', None,
-              '%d Zeilen, %d [FEHL] - auf dem Bau-Rechner gemessen, nicht an '
-              'einer eingerichteten Anlage: nicht aussagekraeftig'
-              % (len(marken), fehl))
+        _st_urteile.append((None, '%s: %d Zeilen, %d [FEHL] - nicht an einer '
+                            'eingerichteten Anlage gemessen' % (
+                                _st_name, len(marken), marken.count('FEHL'))))
     elif marken:
         fehl = marken.count('FEHL')
-        melde('Selbsttest', fehl == 0 and r.returncode == 0,
-              '%d Zeilen, %d [FEHL], Rueckgabe %d' % (len(marken), fehl, r.returncode))
+        _st_urteile.append((fehl == 0 and _st_rc == 0, '%s: %d Zeilen, %d [FEHL], '
+                            'Rueckgabe %d' % (_st_name, len(marken), fehl, _st_rc)))
     else:
-        melde('Selbsttest', False, 'keine auswertbare Ausgabe')
+        _st_erste = (_st_aus + r.stderr).strip().split('\n')[0][:100]
+        _st_urteile.append((False, '%s: keine auswertbare Ausgabe (Rueckgabe %d): %s'
+                            % (_st_name, _st_rc, _st_erste)))
+if _st_urteile:
+    _st_werte = [u for u, _ in _st_urteile]
+    _st_gesamt = (False if False in _st_werte
+                  else (None if None in _st_werte else True))
+    melde('Selbsttest', _st_gesamt,
+          '%d Selbsttest(s): %s' % (len(_st_urteile),
+                                    '; '.join(t for _, t in _st_urteile)))
 else:
     # STRICH, kein Haken. "Konnte nicht pruefen" ist nicht "geprueft und in
     # Ordnung"; wer das einsammelt, hat eine Pruefung weniger, als er glaubt.

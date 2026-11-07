@@ -31,9 +31,12 @@ def selbsttest_urteil(ausgabe, rueckgabe):
     danach nicht mehr, ist das die Meldung, auf die es ankommt.
     """
     m = re.search(r'(\d+) Faelle geprueft, (\d+) Fehlschl', ausgabe)
+    m3 = re.search(r'^SELBSTTEST (\d+)/(\d+)\s*$', ausgabe, re.M)
     marken = re.findall(r'^\[(OK|FEHL|INFO)\]', ausgabe, re.M)
     if m:
         return ('rechenkern', m.group(2) == '0')
+    if m3:
+        return ('zaehler', m3.group(2) == '0' and rueckgabe == 0)
     if marken:
         return ('marken', marken.count('FEHL') == 0 and rueckgabe == 0)
     return ('nichts', False)
@@ -57,6 +60,15 @@ FAELLE = [
     # nur Zierde.
     ('Marken ohne [FEHL], aber Rueckgabe 1',
      '[OK]   alles schoen\n', 1, 'marken', False),
+    # Dritte Form seit 08.11.2026 (Chromecast4lox): "SELBSTTEST gut/schlecht".
+    ('Zaehler, alles gut',
+     'ok   Fall eins\nSELBSTTEST 73/0\n', 0, 'zaehler', True),
+    ('Zaehler mit Fehlschlag',
+     'ok   Fall eins\nFEHL Fall zwei\nSELBSTTEST 72/1\n', 1, 'zaehler', False),
+    # Die Zahl muss am Zeilenanfang stehen - ein Kommentar, der die Form
+    # nur erwaehnt, zaehlt nicht.
+    ('Zaehler nur erwaehnt',
+     'gibt am Ende SELBSTTEST 1/0 aus\n', 0, 'nichts', False),
 ]
 
 

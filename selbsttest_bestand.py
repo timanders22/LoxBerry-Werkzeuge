@@ -19,7 +19,9 @@ werkzeug = sys.argv[1]
 arbeit = sys.argv[2]
 
 quelle = open(werkzeug, encoding='utf-8').read()
-m = re.search(r'^def _selbsttest_suchen\(wurzel\):\n(?:(?:[ \t].*)?\n)+', quelle, re.M)
+# Seit 08.11.2026 traegt die Funktion den Schalter alle=False; ohne ihn
+# liefert sie wie zuvor die erste Datei.
+m = re.search(r'^def _selbsttest_suchen\(wurzel[^)]*\):\n(?:(?:[ \t].*)?\n)+', quelle, re.M)
 if not m:
     raise SystemExit("ABBRUCH: _selbsttest_suchen nicht gefunden in " + werkzeug)
 funktionstext = m.group(0)

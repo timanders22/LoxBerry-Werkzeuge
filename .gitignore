@@ -2,6 +2,11 @@
 # nicht in eine Veroeffentlichung. Vorlage: anonymisierung_woerter.beispiel.txt
 anonymisierung_woerter.txt
 
+# Der Kern des eigenen Projektdateinamens (traegt einen Familiennamen) und die
+# eigenen Ausnahmen des Freigabetors. Vorlage: freigabetor_ausnahmen.beispiel.json
+hausdatei.txt
+freigabetor_ausnahmen.json
+
 # Prüfstände mit ECHTEN Anlagendaten. lb/ und lb_mqtt/ tragen die
 # Konfiguration einer laufenden Installation: Aktionstoken, WLAN-Kennwoerter,
 # Broker-Zugaenge, Fahrzeugnummern. Sie gehoeren nirgendwohin ausser auf den

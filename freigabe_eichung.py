@@ -83,6 +83,68 @@ FAELLE = [
     ("Geheimnis mit Leerzeichen",
      "webfrontend/html/by_lib.php",
      '\n// EICHUNG\n$passwort = "mein geheimes wort";\n', True),
+
+    # ==================================================================
+    # Die sechs Ausnahmen vom 29.08.2026, jede in BEIDE Richtungen
+    # ==================================================================
+    #
+    # Anlass: der Abschnitt war in 19 von 51 Plugins rot und hatte in
+    # keinem recht. Sechs Ausnahmen haben das behoben - und jede davon
+    # ist ein moegliches Loch. Zu jedem "bleibt gruen" steht deshalb ein
+    # Fall daneben, der knapp danebenliegt und ROT werden muss.
+
+    # ---- 1. Anschrift des Urhebers (Apache-Lizenz verlangt sie) ----
+    ("Anschrift in einer Urheberzeile",
+     "webfrontend/html/by_lib.php",
+     '\n// Copyright 2020 Jemand Anders, jemand.anders@firma.de\n', False),
+    ("dieselbe Anschrift OHNE Urheberzeile",
+     "webfrontend/html/by_lib.php",
+     '\n// EICHUNG: Rueckfragen bitte an person.privat@firma.de\n', True),
+
+    # ---- 2. Platzhalteranschrift ----
+    ("Platzhalteranschrift im Eingabefeld",
+     "webfrontend/htmlauth/index.php",
+     '\n<!-- EICHUNG: placeholder="dein.name@mail.de" -->\n', False),
+    ("Anschrift, die nur so anfaengt wie ein Platzhalter",
+     "webfrontend/html/by_lib.php",
+     '\n// EICHUNG: meinhardt.schulze@firma.de\n', True),
+
+    # ---- 3. Platzhalter-MAC ----
+    ("Platzhalter-MAC aus der Anleitung",
+     "webfrontend/html/by_lib.php",
+     '\n// EICHUNG: tag1=AA:BB:CC:DD:EE:FF\n', False),
+    ("MAC eines echten Geraets",
+     "webfrontend/html/by_lib.php",
+     '\n// EICHUNG: B8:27:EB:4C:1D:9F\n', True),
+
+    # ---- 4. Fassungsnummer, die wie eine Adresse aussieht ----
+    ("Fassungsnummer mit Fassungswort in der Zeile",
+     "webfrontend/html/by_lib.php",
+     '\n// EICHUNG: gemessen mit LoxBerry 4.0.0.13\n', False),
+    ("dieselbe Zahlenform OHNE Fassungswort",
+     "webfrontend/html/by_lib.php",
+     '\n// EICHUNG: Gegenstelle 93.184.216.34\n', True),
+
+    # ---- 5. Oeffentlicher Namensdienst ----
+    ("oeffentlicher Namensdienst 8.8.8.8",
+     "webfrontend/html/by_lib.php",
+     '\n// EICHUNG\n$s = socket_connect($x, "8.8.8.8", 53);\n', False),
+
+    # ---- 6. Ein Anfuehrungszeichen, das SCHLIESST ----
+    ("Anfuehrungszeichen schliesst, dahinter Rechenwerk",
+     "webfrontend/html/by_lib.php",
+     "\n// EICHUNG\necho 'Passwort:    ' . strlen($p) . ' Zeichen';\n", False),
+    ("Anfuehrungszeichen OEFFNET, dahinter ein Wert",
+     "webfrontend/html/by_lib.php",
+     "\n// EICHUNG\n$x = 'a'; $passwort = 'geheim123';\n", True),
+
+    # ---- 7. Beschriftung ohne Hausvorsatz ----
+    ("Beschriftung ohne Vorsatz in der Sprachdatei",
+     "templates/lang/language_de.ini",
+     '\nPASSWORT = "Passwort"\n', False),
+    ("Geheimnis ohne Ziffern unter demselben Schluessel",
+     "templates/lang/language_de.ini",
+     '\nPASSWORT = "geheimnis"\n', True),
 ]
 
 

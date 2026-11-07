@@ -1,0 +1,4 @@
+{
+  "_zweck": "Vorlage fuer freigabetor_ausnahmen.json (die eigene Datei bleibt privat, .gitignore). Zugelassene Ausnahmen des Freigabetors (freigabe_pruefen.py). Jede gilt nur fuer EIN Plugin (repo aus RELEASECFG UND plugin_name = NAME = FOLDER in plugin.cfg), EINE Pruefung, einen genauen Pfad (pfad), genaue Pfade mit je ihrem sha256 (pfade) bzw. ein genaues Pfadmuster (pfad_muster) und nur fuer die genannten Befunde; mit sha256 nur fuer genau diesen Dateiinhalt, mit nur_ausserhalb_archiv nur fuer Dateien, die NICHT im ausgelieferten Archiv stehen, mit zeile_enthaelt nur, wenn die Fundzeile diesen Text traegt. Pflichtfelder: id, repo, plugin_name, pruefung, befund, begruendung, datum, entscheidung. Fehlt die Datei, gilt keine Ausnahme.",
+  "ausnahmen": []
+}

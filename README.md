@@ -38,6 +38,8 @@ dass er gefunden wird.
 | `freigabe_pruefen.py` | Alles, was vor einer Veröffentlichung zu prüfen ist, in einem Aufruf — auch: steht ein Geheimnis, eine MAC, eine Netzadresse im Paket? |
 | `zeilenenden_vergleichen.py` | Hat eine Datei ihren Zeilenendstil verloren? |
 | `linie_veroeffentlichen.sh` | Die vorgeschriebene Reihenfolge in einem Aufruf |
+| `projektdatei_vergleichen.py` | Was ist zwischen zwei `.Loxone`-Fassungen anders — in Bausteinen und Verbindungen, nicht in Zeilen? Findet, was Config beim Speichern still verwirft |
+| `miniserver_abgleich.py` | Hat der Miniserver das geladen, was in der Datei steht? Projektdatei gegen `LoxAPP3.json` |
 | `stand_sichern.py` | Lokaler Versionsstand des Arbeitsordners: sichern, Lage, Verlauf, Datei aus einem Stand daneben legen — nie überschreiben, kein Remote |
 | `geraet_abbild.py` | Wie sieht der LoxBerry wirklich aus? Rechte, Pfade, Fassungen, Dienste über SSH — ohne Zugangsdaten |
 | `geraetestand_vergleichen.py` | Trägt das Gerät wirklich den Inhalt seines Tags - oder nur dessen Nummer? Vergleicht die installierten Dateien byteweise mit dem Tag-Archiv der **installierten** Fassung. Zeilenenden und ersetzte Platzhalter zählen nicht als Befund, alles andere schon |
@@ -114,8 +116,14 @@ Veröffentlichung stehen dürfen. Eine solche Liste im Quelltext trüge genau de
 Namen in jede Veröffentlichung, vor dem sie schützen soll. Vorlage:
 `anonymisierung_woerter.beispiel.txt`.
 
-Ebenso nicht: Werkzeuge, die an Projektdatei, Räume oder Netz einer
-bestimmten Anlage gebunden sind, und fremde Bibliotheken.
+Ebenso `hausdatei.txt`: der Kern des Namens der eigenen Projektdatei, den
+`leitungen_setzen.py` und `woerterbuch_lernen.py` brauchen (eine Zeile, Form
+`Projekt_Name`; ersatzweise in der Umgebungsvariablen `LOX_HAUSDATEI`). Und
+`freigabetor_ausnahmen.json`, die eigenen Ausnahmen des Freigabetors; fehlt
+sie, gilt keine. Vorlage: `freigabetor_ausnahmen.beispiel.json`.
+
+Ebenso nicht: Werkzeuge, die an Zugang, Räume oder Netz eines bestimmten
+Geräts gebunden sind, und fremde Bibliotheken.
 
 ## Aufruf
 

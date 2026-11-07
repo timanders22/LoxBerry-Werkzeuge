@@ -1,0 +1,564 @@
+# XML-Typ = deutscher Bausteinname
+#
+# GEMESSEN, nicht zugeordnet. Herkunft je Zeile:
+#   [Foto]  Bildschirmfoto der Config-Eigenschaften vom 30.08.2026; die dort
+#           gezeigte "Bezeichnung" wurde in Leer.Loxone nachgeschlagen und
+#           liefert den XML-Typ eindeutig.
+#   [Titel] Config hat dem frisch eingefuegten Baustein diesen Namen selbst
+#           gegeben, und er steht im deutschen Bausteinverzeichnis.
+#
+# Diese Datei hat Vorrang vor der Titel-Heuristik in werksvorgaben_lesen.py.
+
+Heatcurve = Heizkurve                              # [Foto] Bezeichnung O76
+CmdRecognition = Befehlserkennung                  # [Foto] Bezeichnung O78
+PulseBy = Impuls bei                               # [Foto] Bezeichnung O80
+Memory = Merker                                    # [Foto] Bezeichnung M1
+Text = Notiz                                       # [Foto]
+State = Status                                     # [Foto]
+StateV = Virtueller Status                         # [Foto]
+PushDimmer = Dimmer                                # [Foto] NICHT der Typ "Dimmer"
+BrightnessControl = Konstantlichtregler            # [Foto]
+SequenceController = Ablaufsteuerung               # [Foto]
+MsShortcut = Miniserver Shortcut                   # [Foto]
+NfcCodeTouch = Berechtigung NFC Code Touch         # [Foto]
+Heatmixer = Heizungsmischer                        # [Foto]
+Heatmixer2 = Vorlauftemperatur Rechner             # [Foto]
+ClimateControllerUS = HVAC Controller              # [Foto] Achtung, siehe unten
+HVACController = Heiz- und Kuehlsteuerung          # [Foto] Achtung, siehe unten
+CentralFancoil = Fan Coil Zentralsteuerung         # [Foto]
+StairwayLS = Treppenlichtschalter                  # [Foto]
+PushButton = Schalter                              # [Foto]
+MeterPUni = Impulszaehler                          # [Foto]
+Roomcontrol = Raumregelung                         # [Foto]
+AlarmClock = Wecker                                # [Titel]
+AutoJalousie = Automatikbeschattung                # [Titel]
+CentralShade = Automatikbeschattung Zentral        # [Titel]
+Jalousiemotor = Automatikbeschattung Integriert    # [Titel]
+DayTimer = Schaltuhr                               # [Titel]
+Irrigation = Bewaesserung                          # [Titel]
+SpotOpt = Spotpreis-Optimierer                     # [Titel]
+EFM = Energieflussmonitor                          # [Titel]
+PushButton2Sel = 2 Auswahltasten                   # [Titel]
+PButtonT = Taster                                  # [Titel]
+
+# ZWEI FALLEN, die ohne Messung sicher danebengegangen waeren:
+#
+# 1. Die beiden Klimabausteine sind ueber Kreuz benannt:
+#       ClimateControllerUS  heisst  "HVAC Controller"
+#       HVACController       heisst  "Heiz- und Kuehlsteuerung"
+#    Wer vom XML-Namen auf den deutschen schliesst, erwischt jedes Mal den
+#    falschen.
+#
+# 2. Der Baustein, der in Config "Dimmer" heisst, ist im XML "PushDimmer".
+#    Den Typ "Dimmer" gibt es ausserdem - er ist etwas anderes und kommt im
+#    Haus 24-mal vor.
+#
+# NOCH OFFEN - beide tragen in Leer.Loxone den Titel "Zentral" und lassen sich
+# aus den Fotos nicht auseinanderhalten:
+#    HeatIRoomController2   "Intelligente Raumregelung" ODER "... Gen 1"
+#    IRoomcontrol           die jeweils andere
+# Der Hausbaustein ist HeatIRoomController2 (18-mal). Zu klaeren durch einen
+# Blick auf die Kopfzeile genau dieses Bausteins in Config.
+
+# --- Nachtrag 30.08.2026, Teil 2 und 3 der Bildschirmfotos -------------------
+HeatIRoomController2 = Intelligente Raumregelung   # [Foto+Messung] siehe unten
+IRoomcontrol = Intelligente Raumregelung Gen 1     # [Foto+Messung] siehe unten
+TextGenerator = Text Generator                     # [Foto] Bezeichnung O2 und O79
+Webpage = Webpage                                  # [Foto]
+AutomaticScene = Szene                             # [Foto]
+Code16 = Programm                                  # [Foto] niemand wuerde das raten
+Application = App                                  # [Foto]
+SystemScheme = Anlagenschema                       # [Foto]
+AutopilotRule = Automatik-Regel                    # [Foto]
+DbConE = Event Database Connector                  # [Foto]
+DbConS = Session Database Connector                # [Foto]
+
+# WIE DIE RAUMREGLER AUSEINANDERGEHALTEN WURDEN
+# Beide tragen in Leer.Loxone den Titel "Zentral". Entschieden hat es die
+# Anschlussform gegen den Inhalt des Eigenschaftenfensters:
+#
+#   HeatIRoomController2  hat SourceCap, srcName, TPWM
+#      -> Fenster "Intelligente Raumregelung": "Quellen konfigurieren",
+#         "PWM Ausgaenge"
+#   IRoomcontrol          hat Month, Day, MonthC, DayC, MixerH, MixerC
+#      -> Fenster "Intelligente Raumregelung Gen 1": "Benutzerdefinierte
+#         Heizperiode", "Erster/Letzter Tag Heiz- und Kuehlperiode"
+#
+# Unabhaengig bestaetigt durch ein Bildschirmfoto mit der Kopfzeile
+# "Eigenschaften (Intelligente Raumregelung Gen 1)".
+# Das Haus benutzt HeatIRoomController2 - 18-mal.
+
+# --- Nachtrag Teil 4, 30.08.2026 ---------------------------------------------
+AnalogMultiplexer2     = Analogwahlschalter               # [Foto] Bezeichnung O6
+AnalogMultiplexer      = Analogwahlschalter 4-fach        # [Foto] Bezeichnung O7
+Validator              = Analogwertvalidierung            # [Foto] Bezeichnung O8
+AnalogWatchdog         = Analogwertueberwachung           # [Foto] Bezeichnung O9
+AnalogDiffTrigger      = Differenzschwellwertschalter     # [Foto] Bezeichnung O10
+PWM                    = Pulsweitenmodulator              # [Foto] Bezeichnung O11
+AnalogThresholdTrigger = Schwellwertschalter              # [Foto] Bezeichnung O12
+AnalogScaler           = Skalierer                        # [Foto] Bezeichnung O13
+AnalogStepper          = Stepper                          # [Foto] Bezeichnung O14
+
+# --- Nachtrag Teil 5, 30.08.2026 ---------------------------------------------
+AMinmax                = Analog MinMax-Begrenzer          # [Foto] Bezeichnung O3
+AnalogComparator       = Analogkomparator                 # [Foto] Bezeichnung O4
+AMemory                = Analogspeicher                   # [Foto] Bezeichnung O5, bestaetigt
+DigitalIn              = Digitaleingang                   # [Sammeldialog] Objekttyp-Spalte
+VoltageIn              = Spannungseingang                 # [Sammeldialog] Objekttyp-Spalte
+
+# Die beiden letzten stammen aus "Nach Typ bearbeiten". Dessen Spalte
+# "Objekttyp" nennt den deutschen Namen JEDER Zeile - das ist die schnellste
+# Quelle fuer die Peripherie, die im Bausteine-Katalog nicht vorkommt.
+# Gegenprobe: die Zeilen "Eingang 1..8" sind in Leer.Loxone DigitalIn, die
+# Zeilen "Spannung 1..4" sind VoltageIn.
+
+# --- Nachtrag Teil 6, 30.08.2026 ---------------------------------------------
+IRcontroller           = IR Steuerung                     # [Foto] Bezeichnung O15
+Switch2Button          = Tastschalter                     # [Foto] Bezeichnung O16
+CentralLight           = Licht Zentral                    # [Foto] Bezeichnung Licht Zentral
+LightsceneRGB          = RGB-Lichtszene                   # [Foto] Bezeichnung RGB-Lichtszene
+LightControllerH       = Hotel Lichtsteuerung             # [Foto] Bezeichnung Hotel Lichtsteuerung
+EibDimmer              = EIB Dimmer                       # [Foto] Bezeichnung EIB Dimmer
+Radio                  = Radiotasten                      # [Foto] Bezeichnung Radiotasten
+Radio2                 = Radiotasten 16 Eingaenge         # [Foto] Bezeichnung Radiotasten 16 Eingänge
+StepSel                = Stufenauswahl                    # [Foto] Bezeichnung Stufenauswahl
+MultiFuncSW            = Komfortschalter                  # [Foto] Bezeichnung Komfortschalter
+EIBPush                = EIB-Taster                       # [Foto] Bezeichnung EIB-Taster
+PushButtonSel          = Auswahltaste                     # [Foto] Bezeichnung Auswahltaste
+PushButton2            = 2 Tasten                         # [Foto] Bezeichnung 2 Tasten
+
+# --- Nachtrag Teil 8 (Beschattung/Beleuchtung), 30.08.2026 -------------------
+ShadeRoof              = Dachfenster Beschattung          # [Foto] Bezeichnung Dachfenster Beschattung
+EIBJalousie            = EIB Beschattung                  # [Foto] Bezeichnung EIB Beschattung
+
+# --- Nachtrag Klima, 30.08.2026 ----------------------------------------------
+DewPoint                 = Taupunktrechner                    # [Foto] Bezeichnung O21
+ToiletFan                = WC Lueftungssteuerung              # [Foto] Bezeichnung WC Lüftungssteuerung
+Solarpumpcontrol         = Solarregelung                      # [Foto] Bezeichnung Solarregelung
+Ventilation              = Raumlueftungssteuerung             # [Foto] Bezeichnung Raumlüftungssteuerung
+Leaf                     = Leaf Luefter                       # [Foto] Bezeichnung Leaf Lüfter
+HvacAC                   = Klimaanlagen Zentralsteuerung      # [Foto] Bezeichnung Klimaanlagen Zentralsteuerung
+VentInternorm            = Internorm Luefter                  # [Foto] Bezeichnung Internorm Lüfter
+Fancoil                  = Fan Coil Steuerung                 # [Foto] Bezeichnung Fan Coil Steuerung
+FancoilFreshAir          = Fan Coil Frischluft Steuerung      # [Foto] Bezeichnung Fan Coil Frischluft Steuerung
+AcControl                = Klimaanlagensteuerung             # [Foto+Form] Titel "Zentral" mehrdeutig; entschieden ueber toggle/status/mode/fan/airDir/tempTarget
+
+# DIE KLIMAFAMILIE IST DAS DICHTESTE NAMENSDICKICHT DIESER ANLAGE
+# Vier Bausteine tragen HVAC oder AC im XML-Namen und heissen voellig
+# verschieden - kein einziger so, wie man es erwarten wuerde:
+#
+#    ClimateControllerUS  ->  "HVAC Controller"
+#    HVACController       ->  "Heiz- und Kuehlsteuerung"
+#    HvacAC               ->  "Klimaanlagen Zentralsteuerung"
+#    AcControl            ->  "Klimaanlagensteuerung"
+#
+# Dazu drei Raumregler (Roomcontrol, HeatIRoomController2, IRoomcontrol),
+# drei Fan-Coil-Bausteine (Fancoil, FancoilFreshAir, CentralFancoil) und
+# vier Lueftungsbausteine (Ventilation, ToiletFan, Leaf, VentInternorm).
+# Wer hier vom XML-Namen auf den Baustein schliesst, greift daneben.
+
+# --- Nachtrag Energie/Fenster/Regler, 30.08.2026 -----------------------------
+2Point                   = 2-Punkt-Regler                     # [Foto] Bezeichnung O18
+3Point                   = 3-Punkt-Regler                     # [Foto] Bezeichnung O19
+CentralRoofwindow        = Fenster Zentral                    # [Foto] Bezeichnung Fenster Zentral
+WindowsMonitor           = Fenster- und Tuerueberwachung      # [Foto] Bezeichnung Fenster - und Türüberwachung
+RoofWindow               = Fenster                            # [Foto] Bezeichnung Fenster
+JoinWindowSensor         = Composite-Fensterkontakt           # [Foto] Bezeichnung Composite-Fensterkontakt
+WBEM                     = Wallbox Manager                    # [Foto] Bezeichnung Wallbox Manager
+Wallbox                  = Wallbox                            # [Foto] Bezeichnung Wallbox
+PVProductionForecast     = PV Produktionsvorhersage           # [Foto] Bezeichnung PV Produktionsvorhersage
+LoadShed                 = Lastmanager                        # [Foto] Bezeichnung Lastmanager
+Fronius                  = Energiemonitor                     # [Foto] Bezeichnung Energiemonitor
+EnergyManager2           = Energiemanager                     # [Foto] Bezeichnung Energiemanager
+PowerUnit                = Power Supply und Backup           # [Foto] Titel "Power Supply &amp; Backup"
+
+# ZWEI WEITERE NAMENSFALLEN AUS DER ENERGIE- UND FENSTERSEITE
+#
+# 1. Der XML-Typ `Fronius` ist NICHT herstellergebunden - er heisst in Config
+#    schlicht "Energiemonitor". Wer ihn im XML sieht und einen
+#    Fronius-Wechselrichter vermutet, liegt falsch. (Dieses Haus HAT einen
+#    Fronius, benutzt den Typ aber nicht - umso verwechslungstraechtiger.)
+#
+# 2. `RoofWindow` heisst schlicht "Fenster", `CentralRoofwindow` heisst
+#    "Fenster Zentral". Das "Roof" im XML-Namen steht nicht im deutschen.
+#    Das echte Dachfenster ist `ShadeRoof` = "Dachfenster Beschattung".
+
+# --- Nachtrag Mathematik/Logik/Multimedia, 30.08.2026 ------------------------
+Sequencer                = Sequenzer                      # [Foto] Bezeichnung O31
+Add                      = Addierer                       # [Foto] Bezeichnung O33
+Add4                     = Addierer 4                     # [Foto] Bezeichnung O34
+Div                      = Dividierer                     # [Foto] Bezeichnung O35
+Formula                  = Formel                         # [Foto] Bezeichnung O36
+Int                      = Ganzzahl                       # [Foto] Bezeichnung O37
+Avg                      = Gleitender Mittelwert          # [Foto] Bezeichnung O38
+Minmax                   = MinMax                         # [Foto] Bezeichnung O39
+TimeMinmax               = MinMax seit Reset              # [Foto] Bezeichnung O40
+Average                  = Mittelwert                     # [Foto] Bezeichnung O41
+Mod                      = Modulo                         # [Foto] Bezeichnung O42
+Mult                     = Multiplizierer                 # [Foto] Bezeichnung O43
+Sub                      = Subtrahierer                   # [Foto] Bezeichnung O44
+Rand                     = Zufallsgenerator               # [Foto] Bezeichnung O45
+Media                    = Mediensteuerung                # [Foto] Bezeichnung Medien-Steuerung
+CentralMusic             = Audio Zentral                  # [Foto] Bezeichnung Audio Zentral
+MPGroup                  = Audio Player Gruppe fix        # [Foto] Bezeichnung Audio Player Gruppe fix
+
+# DER ZEHNTE KREUZFALL: die beiden Mittelwerte
+#    Average  ->  "Mittelwert"              (V1-V4, einfacher Durchschnitt)
+#    Avg      ->  "Gleitender Mittelwert"   (ein Eingang, C=60 s, N=60 Messungen)
+# Der XML-Name `Avg` sieht aus wie die Abkuerzung von `Average` - er ist aber
+# der gleitende. Wer sie verwechselt, mittelt ueber die falsche Groesse.
+#
+# UND DIE BESTAETIGUNG DER MINMAX-FRAGE VOM 30.08.2026:
+#    Minmax      = "MinMax"              (Bezeichnung O39)
+#    TimeMinmax  = "MinMax seit Reset"   (Bezeichnung O40)
+# Damit ist gemessen, was zuvor nur aus der Anschlussform erschlossen war -
+# und die Nachfrage des Hausherrn ("ist das nicht MinMax seit Reset?") war
+# genau die richtige.
+
+# --- Nachtrag Regler/Logik, 30.08.2026 ---------------------------------------
+BinDecoder               = Binaerdekoder                  # [Foto] Bezeichnung O22
+BinEncoder               = Binaerkodierer                 # [Foto] Bezeichnung O23
+Xor                      = Exklusiv ODER                  # [Foto] Bezeichnung O24
+EdgeDetection            = Flankenerkennung               # [Foto] Bezeichnung O25
+Not                      = Nicht                          # [Foto] Bezeichnung O26
+Or                       = Oder                           # [Foto] Bezeichnung O27
+RSFlipFlop               = RS-Impulsschalter              # [Foto] Bezeichnung O28
+SRFlipFlop               = SR-Impulsschalter              # [Foto] Bezeichnung O29
+Shift                    = Schieberegister                # [Foto] Bezeichnung O30
+PI                       = PI-Regler                      # [Foto] Bezeichnung O48
+PID                      = PID-Regler                     # [Foto] Bezeichnung O49
+Ramp                     = Rampensteuerung                # [Foto] Bezeichnung O50
+TPDC                     = Touch Pure Display Controller  # [Foto] Bezeichnung Touch Pure Display Controller
+TpfController            = Touch Pure Flex Controller     # [Foto] Bezeichnung Touch Pure Flex Controller
+
+# --- Nachtrag Ueberwachung/Alarm, 30.08.2026 ---------------------------------
+CallGen                  = Call Generator                   # [Foto] Bezeichnung O72
+MailGen                  = Mail Generator                   # [Foto] Bezeichnung O74
+AalSmartAlarm            = AAL Smart Alarm                  # [Foto] Bezeichnung AAL Smart Alarm
+Alarm                    = Alarmanlage                      # [Foto] Bezeichnung Alarmanlage
+CentralAlarm             = Alarmanlage Zentral              # [Foto] Bezeichnung Alarmanlage Zentral
+AlarmChain               = Alarmierungskette                # [Foto] Bezeichnung Alarmierungskette
+SmokeAlarm               = Brand- und Wassermeldezentrale   # [Foto] Bezeichnung Brand- und Wassermeldezentrale
+AalEmergency             = Notfall Alarm                    # [Foto] Bezeichnung Notfall Alarm
+Ping                     = Ping                             # [Foto] Bezeichnung Ping
+MailBox                  = Post- und Paketkasten            # [Foto] Bezeichnung Post- und Paketkasten
+CentralPresence          = Praesenz Zentral                 # [Foto] Bezeichnung Präsenz Zentral
+StatusMonitor            = Status Monitor                   # [Foto] Bezeichnung Status Monitor
+Tablet                   = Tablet                           # [Foto] Bezeichnung Tablet
+SteakThermo              = Touch und Grill                  # [Foto] Titel "Touch &amp; Grill"
+
+# DIE ELFTE NAMENSFALLE - und sie betrifft dieses Haus:
+#    SmokeAlarm  heisst  "Brand- und WASSERmeldezentrale"
+# Der XML-Name nennt nur den Rauch; der Baustein ueberwacht auch Wasser. Er
+# steht 2-mal in dieser Anlage. Wer nach der Wassermeldung sucht und nach
+# "Water" greift, findet nichts.
+#
+# Ebenfalls unerratbar: SteakThermo = "Touch & Grill", Code16 = "Programm",
+# Fronius = "Energiemonitor", MeterPUni = "Impulszaehler".
+
+# --- Nachtrag Vergleiche/Wellness, 30.08.2026 --------------------------------
+Equal                    = Gleich                         # [Foto] Bezeichnung O51
+Greater                  = Groesser                       # [Foto] Bezeichnung O52
+GreaterEqual             = Groesser oder gleich           # [Foto] Bezeichnung O53
+Less                     = Kleiner                        # [Foto] Bezeichnung O55
+LessEqual                = Kleiner oder gleich            # [Foto] Bezeichnung O56
+NotEqual                 = Ungleich                       # [Foto] Bezeichnung O57
+PoolController           = Poolsteuerung                  # [Foto] Bezeichnung Poolsteuerung
+Sauna                    = Saunasteuerung                 # [Foto] Bezeichnung Saunasteuerung
+SaunaVapor               = Saunasteuerung mit Verdampfer  # [Foto] Bezeichnung Saunasteuerung Verdampfer
+
+# --- Nachtrag Zeiten/Zaehler, 30.08.2026 -------------------------------------
+OffDelay                 = Ausschaltverzoegerung              # [Foto] Bezeichnung O58
+OnOffDelay               = Ein- und Ausschaltverzoegerung     # [Foto] Bezeichnung O59
+OnDelay                  = Einschaltverzoegerung              # [Foto] Bezeichnung O60
+RetOnDelay               = Einschaltverzoegerung speichernd   # [Foto] Bezeichnung O61
+EdgeWipingRelay          = Flankengetriggertes Wischrelais    # [Foto] Bezeichnung O62
+PulseGen                 = Impulsgeber                        # [Foto] Bezeichnung O63
+LongClick                = Langzeitklick                      # [Foto] Bezeichnung O64
+MultiClick               = Mehrfachklick                      # [Foto] Bezeichnung O65
+Monoflop                 = Monoflop                           # [Foto] Bezeichnung O66
+OnPulseDelay             = Verzoegerter Impuls                # [Foto] Bezeichnung O67
+RandomGen                = Zufallssteuerung                   # [Foto] Bezeichnung O68
+Wind                     = Windmesser                         # [Foto] Bezeichnung O71
+PulseAt                  = Impuls um                          # [Foto] Bezeichnung Impuls um
+MeterPSt                 = Impulszaehler und Speicher         # [Foto] Bezeichnung Impulszähler für Speicher
+MeterPBi                 = Impulszaehler Bidirektional        # [Foto] Bezeichnung Impulszähler Bidirektional
+MeterAbsUni              = Zaehler                            # [Foto] Bezeichnung Zähler
+MeterAbsSt               = Zaehler und Speicher               # [Foto] Bezeichnung Zähler für Speicher
+MeterAbsBi               = Zaehler Bidirektional              # [Foto] Bezeichnung Zähler Bidirektional
+HourCounter              = Betriebszeitzaehler                # [Foto] Bezeichnung Betriebszeitzähler
+MeterDig                 = Festwertzaehler                    # [Foto] Bezeichnung Festwertzähler
+
+# --- Nachtrag Zentral/Zaehler, 30.08.2026 ------------------------------------
+Counter                  = Aufwaertszaehler               # [Foto] Bezeichnung O69
+UpDownCounter            = Auf/Abwaerts-Zaehler           # [Foto] Bezeichnung O70
+CentralGate              = Tor Zentral                    # [Foto] Bezeichnung Tor Zentral
+
+# --- Nachtrag Peripherie, 30.08.2026 -----------------------------------------
+Actor                    = Aktor (Relais)                 # [Foto] Bezeichnung Aktor (Relais) 1
+Logger                   = Standard Logger                # [Foto] Bezeichnung Standard Logger
+Mailer                   = Loxone Cloud Mailer            # [Foto] Bezeichnung Loxone Cloud Mailer
+Caller                   = Caller                         # [Foto] Bezeichnung Feuerwehr
+CarChargerDevice         = Wallbox (Geraet)               # [Foto] Bezeichnung Wallbox 2
+ModbusServer             = Modbusserver                   # [Foto] Bezeichnung Modbusserver 1
+MultiMediaServer         = Loxone Music Server            # [Foto] Bezeichnung Loxone Music Server 2
+NetworkDevice            = Intercom                       # [Foto] Bezeichnung Intercom
+IntercomDevice           = Loxone Intercom                # [Foto] Bezeichnung Loxone Intercom
+IntercomDevice           = Benutzerdefinierte Intercom    # [Foto] Bezeichnung Benutzerdefinierte Intercom
+Notification             = Benachrichtigung                 # [Foto] Kopfzeile "Eigenschaften (Benachrichtigung)" in der Hausdatei; "Systembenachrichtigung" war nur der TITEL des Objekts in Leer.Loxone
+
+# `Plugin` IST KEIN BAUSTEIN, SONDERN EIN BEHAELTER
+# Am 30.08.2026 gemessen: elf voellig verschiedene Hersteller-Anbindungen
+# tragen im XML denselben Typ `Plugin` und unterscheiden sich NUR im Titel:
+#
+#    MQTT              Matter            Home Connect      Husqvarna
+#    Gardena           Fronius           Miele@home        Segway Navimow
+#    EEBUS Geraet      MCP Server        OCPP Server Connector
+#
+# Eine Zeile "Plugin = ..." waere deshalb falsch und steht hier nicht. Wer
+# wissen will, WELCHE Anbindung ein Plugin-Baustein ist, liest seinen Titel.
+# Dieses Haus hat 8 Stueck.
+Plugin                   = (Behaelter - siehe Hinweis oben, Titel entscheidet)
+
+# --- Nachtrag Virtuell/Zutritt, 30.08.2026 -----------------------------------
+VirtualOut               = Virtueller Ausgang               # [Foto] Bezeichnung Ausgang VQ1
+VirtualOutCaption        = Virtuelle Ausgaenge              # [Foto] Bezeichnung Virtuelle Ausgänge
+VirtualUdpIn             = Virtueller UDP Eingang           # [Foto] Bezeichnung Eingang VUI2
+VirtualUdpInCmd          = Virtueller UDP Eingang Befehl    # [Foto] Bezeichnung Befehl VCI1
+VirtualIn                = Virtueller Eingang               # [Foto] Bezeichnung Eingang VI1
+VirtualHttpIn            = Virtueller HTTP Eingang          # [Foto] Bezeichnung Eingang VHI1
+VirtualTextIn            = Virtueller Texteingang           # [Foto] Bezeichnung Eingang VTI1
+Doorcontroller           = Tuersteuerung                    # [Foto] Bezeichnung Türsteuerung
+Door                     = Tor                              # [Foto] Bezeichnung Tor
+Intercom                 = Sprechanlage                     # [Foto] Bezeichnung Sprechanlage
+Access                   = Berechtigung                     # [Foto] Bezeichnung Berechtigung
+
+# --- Nachtrag Lichtsteuerung, 30.08.2026 -------------------------------------
+LightController2         = Lichtsteuerung                   # [Foto+Werkswert] siehe unten
+
+# WIE DIE LICHTSTEUERUNG ENTSCHIEDEN WURDE
+# Der Titel war "Zentral" und damit mehrdeutig - vier Lichtbausteine tragen
+# ihn. Entschieden hat der Parameter aus dem Eigenschaftenfenster:
+#
+#    Fenster zeigt   Brt - Brightness threshold [lux] = 30
+#    LightController2   BrightnessLimit = 30     <- passt
+#    LightControllerH   Min = 15, Max = 100
+#    BrightnessControl  Target = 5000
+#    CentralLight       keine Parameter
+#
+# Die "2" ist hier die VERSION, nicht eine Anzahl - anders als bei Radio/Radio2
+# (8 gegen 16 Eingaenge) und AnalogMultiplexer/AnalogMultiplexer2 (4 gegen 2).
+# Dieselbe Ziffer bedeutet in dieser Anlage dreierlei.
+
+# --- Nachtrag Befehle und UND, 30.08.2026 ------------------------------------
+VirtualOutCmd            = Virtueller Ausgang Befehl        # [Foto] Bezeichnung Befehl VCQ1
+VirtualHttpInCmd         = Virtueller HTTP Eingang Befehl   # [Foto] Bezeichnung Befehl VCI2
+
+And                      = Und                              # [Foto] Bezeichnung O126, zusaetzlich durch Ausschluss bestaetigt
+
+# WARUM `And` = "Und" KEIN RATEN IST
+# Gemessen: genau drei Typen haben die Anschlussform (I1, I2, Q) - And, Or, Xor.
+# Gemessen: Or = "Oder" (Bezeichnung O27), Xor = "Exklusiv ODER" (O24).
+# Das deutsche Bausteinverzeichnis kennt fuer diese Form genau drei Namen:
+# Und, Oder, Exklusiv ODER. Zwei davon sind vergeben; es bleibt genau einer.
+#
+# Das Bildschirmfoto vom 30.08.2026 zeigte "Eigenschaften (UND)" mit der
+# Bezeichnung O125 - dieser Baustein steht aber nicht in der gespeicherten
+# Datei (dort heisst der neue And-Baustein O126). Ueber das Foto ist es also
+# NICHT belegt. Belegt ist es durch den Ausschluss oben.
+
+# --- Nachtrag Struktur und Systemobjekte, 30.08.2026 -------------------------
+WeatherServer            = Wetterserver                     # [Foto]
+SysVar                   = Systemvariable                   # [Foto] Regen, Internetverbindung u.a. sind NUR SysVar
+User                     = Benutzer                         # [Foto] Bezeichnung admin
+UserGroup                = Benutzergruppe                   # [Foto] Bezeichnung Vollzugriff
+Category                 = Kategorie                        # [Foto+Form] siehe unten
+SwitchingTimer           = Zutrittszeit                     # [Foto] Bezeichnung Immer
+TimeCaption              = Zeitfunktionen                   # [Foto] Ueberschrift im Baum
+ConstantCaption          = Konstanten                       # [Foto] Ueberschrift im Baum
+CalendarCaption          = Betriebszeiten                   # [Foto] Ueberschrift im Baum
+
+# KATEGORIE GEGEN BERECHTIGUNGSGRUPPE
+# Jede Kategorie hat eine gleichnamige RightGroup - der Titel entscheidet also
+# nie. Entschieden hat die Attributform:
+#    Category    Icon=..., PType=..., RGR=...   -> Symbol, Kategoriegruppe, Verweis
+#    RightGroup  GT=..., MG=...
+# Das Eigenschaftenfenster zeigt Symbol, Kategoriegruppe, Akzentfarbe - das
+# passt auf Category, nicht auf RightGroup.
+#
+# BERICHTIGUNG ZU EINER FRUEHEREN AUSSAGE
+# Ich hatte notiert, SysVar habe "keinen Einzelnamen", weil sich die Exemplare
+# nur im Datentyp unterscheiden. Das war falsch: der TYP heisst
+# "Systemvariable"; verschieden sind nur die WERTE (Regen, Sonnenschein,
+# Windgeschwindigkeit). Dasselbe gilt fuer WeatherData - dort steht der
+# Typname noch aus.
+
+# --- Nachtrag Modbus/MQTT, 30.08.2026 ----------------------------------------
+ModbusDev                = Modbus Geraet                      # [Foto] Bezeichnung Modbus Gerät 1
+GenTSensor               = MQTT Subscription (Text Eingang)   # [Foto] Bezeichnung Subscription
+GenTActor                = MQTT Publish                       # [Foto] Bezeichnung Publish
+
+# --- Nachtrag Extensions, 30.08.2026 -----------------------------------------
+LoxKnx                   = KNX Extension              # [Foto] Bezeichnung KNX Extension
+LoxREL                   = Relay Extension            # [Foto] Bezeichnung Relay Extension
+Comm485                  = RS485 Extension            # [Foto] Bezeichnung RS485 Extension
+Comm232                  = RS232 Extension            # [Foto] Bezeichnung RS232 Extension
+LoxTree                  = Tree Extension             # [Foto] Bezeichnung Tree Extension
+Comm485                  = Modbus Extension           # [Foto] Bezeichnung Modbus Extension
+Comm1wire                = 1-Wire Extension           # [Foto] Bezeichnung 1-Wire Extension
+Dimmer                   = Dimmerausgang                    # [Foto] Kopfzeile "Eigenschaften (Dimmerausgang)" in der Hausdatei; "Smartaktor 1" war nur der TITEL in Leer.Loxone
+DigitalOut               = Digitalausgang             # [Foto] Bezeichnung Ausgang X2 (Relais)
+LoxDIMM                  = Dimmer Extension           # [Foto] Bezeichnung Dimmer Extension
+LoxAinV2                 = AI Extension               # [Foto] Bezeichnung AI Extension
+LoxAout                  = AO Extension               # [Foto] Bezeichnung AO Extension
+LoxDigin                 = DI Extension               # [Foto] Bezeichnung DI Extension
+LoxAIR                   = Air Base Extension         # [Foto] Bezeichnung Air Base Extension
+LoxMORE                  = Extension                  # [Foto] Bezeichnung Extension
+
+# DIE DIMMER-FALLE, SYSTEMATISCH ABGESUCHT (30.08.2026)
+# Muster: ein XML-Typ heisst genauso wie der DEUTSCHE Name eines ANDEREN Typs.
+# Ueber alle 223 benannten Typen durchsucht - es gibt genau drei:
+#
+#   deutsch "Dimmer"          = PushDimmer          ... aber Typ `Dimmer` = Smartaktor (24x im Haus)
+#   deutsch "HVAC Controller" = ClimateControllerUS ... aber Typ `HVACController` = Heiz- und Kuehlsteuerung (1x)
+#   deutsch "Intercom"        = NetworkDevice       ... aber Typ `Intercom` = Sprechanlage (0x)
+#
+# Mehr sind es nicht. Wer einen dieser sechs Namen liest, muss zweimal
+# hinsehen; bei allen uebrigen Typen ist der Name eindeutig.
+#
+# GRENZE DIESER AUSSAGE: gesucht wurde nur unter den benannten Typen. Unter den
+# 43 noch unbenannten Haustypen koennte eine vierte Falle stecken - die
+# groessten davon sind aber Verweise (InputRef 811, OutputRef 197,
+# OutputRefLM 123) und Struktur (Page 99, RightGroup 64, Place 27), also
+# Objekte ohne Bausteinnamen.
+
+# --- Nachtrag Hausdatei, 30.08.2026 ------------------------------------------
+# Aus der echten Projektdatei, nicht aus Leer.Loxone.
+
+# BERICHTIGUNG: `Notification` heisst "Benachrichtigung", nicht
+# "Systembenachrichtigung". Der frueher eingetragene Name war der TITEL des
+# Objekts in Leer.Loxone, nicht der Typname. Die Kopfzeile in der Hausdatei
+# sagt "Eigenschaften (Benachrichtigung)".
+#
+# `OutputRefLM` ist KEIN Objekt, sondern der VERWEIS von einem Baustein auf
+# einen Logger, Mailer, Tracker oder eine Benachrichtigung. Gemessen: jedes
+# Mitteilungsobjekt der Hausdatei traegt neben seinem eigenen Typ zusaetzlich
+# OutputRefLM-Eintraege gleichen Titels. LM = Logger/Mailer. 123 Stueck.
+
+# NOCH NICHT BELEGT - nur aus dem Namensmuster erschlossen, deshalb NICHT
+# eingetragen. Jede Extension traegt drei gleichnamige Objekte:
+#    "Onlinestatus <Extension>"     -> Online (42x)
+#    "CPU-Temperatur <Extension>"   -> SysTemp (18x)
+#    "Temperaturabschaltung"        -> OvertempShutdown (19x)
+# Das Praefix sieht nach dem Typnamen aus, ist aber nur der Objekttitel. Ein
+# Blick auf die Kopfzeile eines dieser drei Objekte wuerde es entscheiden.
+
+# --- Nachtrag Peripherie aus der Hausdatei, 30.08.2026 -----------------------
+VoltageOut               = Spannung                          # [Foto] Kopfzeile "Eigenschaften (Spannung 1/3)"; Slotname wie bei Actor
+
+# BERICHTIGUNG, DIE DRITTE DERSELBEN ART
+#    Dimmer  heisst "Dimmerausgang", nicht "Smartaktor".
+# "Smartaktor 1" war der TITEL des Objekts in Leer.Loxone. Vorher schon so
+# danebengegriffen bei HeatIRoomController2 ("Zentral" = Raumname), Memory
+# ("M1" = laufende Nummer) und Notification ("Systembenachrichtigung").
+# LEHRE: Ein Titel ist NIE ein Typname. Nur die Kopfzeile des
+# Eigenschaftenfensters oder die Objekttyp-Spalte des Sammeldialogs zaehlt.
+#
+# Damit wird die Dimmer-Falle noch schaerfer:
+#    PushDimmer  = "Dimmer"          der Baustein im Katalog
+#    Dimmer      = "Dimmerausgang"   der Analogausgang einer Dimmer Extension
+#                                    24-mal in dieser Anlage
+#
+# ZWEI NAMENSEBENEN BEI DER PERIPHERIE - gemessen 30.08.2026:
+#    Kopfzeile des Fensters = SLOTNAME   "Eingang 1", "Spannung 1",
+#                                        "Aktor (Relais) 8"
+#    Objekttyp-Spalte       = TYPNAME    "Digitaleingang", "Spannungseingang"
+# Beide sind richtig, aber sie sind nicht dasselbe. Fuer VoltageOut ist nur
+# der Slotname gemessen; ob die Objekttyp-Spalte "Spannungsausgang" sagt, ist
+# NICHT geprueft.
+
+# --- Nachtrag 1-Wire und Peripherie-Kopfzeilen, 30.08.2026 -------------------
+Lox1wireDevice           = 1-Wire Geraet                    # [Foto] Kopfzeile "Eigenschaften (1-Wire Geraet)"
+Lox1wireAsensor          = 1-Wire Analogsensor              # [Foto] Kopfzeile "Eigenschaften (1-Wire Analogsensor)"
+
+# DAS PAAR, DAS SICH NICHT UEBER DEN TITEL TRENNEN LIESS
+# Beide heissen gleich, z.B. "OG Flur Temperaturfuehler". Im Baum liegt der
+# Analogsensor ALS KIND im Geraet, und die Kopfzeilen unterscheiden sie:
+#    Lox1wireDevice   "1-Wire Geraet"        Geraetetyp DS18B20 (28),
+#                                            1-Wire Seriennummer, Abfragezyklus
+#    Lox1wireAsensor  "1-Wire Analogsensor"  Kategorie, Raum, Einheit,
+#                                            KORREKTUR (Eingangs-/Zielwert)
+#
+# Die Korrektur sitzt am ANALOGSENSOR, nicht am Geraet. Genau dort stand am
+# 29.08.2026 die Verstaerkung 17,3 -> 22, die das Wohnzimmer um 6,4 K zu warm
+# meldete. Ein gesunder Fuehler zeigt dort 0/0 und 100/100 - so wie
+# "OG Flur Temperaturfuehler" und "OG Duschbad Temperaturfuehler" auf den
+# Fotos vom 30.08.2026.
+
+# --- Nachtrag Peripherie aus der Hausdatei, Teil 2, 30.08.2026 ---------------
+Constant                 = Konstante                        # [Foto] Bezeichnung "Konstante 60"
+Online                   = Onlinestatus                     # [Foto] Bezeichnung "Onlinestatus 05_Rel_01"
+SysTemp                  = Systemtemperatur                 # [Foto] siehe Warnung unten
+OvertempShutdown         = Temperaturabschaltung            # [Foto] Bezeichnung "Temperaturabschaltung"
+ApiActor                 = API Connector                    # [Foto] Bezeichnung "API Connector Grid/PV/Battery"
+GenDev                   = Geraet                           # [Foto] Bezeichnung "HybridManager_<Haus>-Symo-Hybrid-5-0"
+LanInt                   = Netzwerk Interkommunikation      # [Foto]
+
+# WARNUNG: `SysTemp` heisst "SYSTEMTEMPERATUR", nicht "CPU-Temperatur"
+# Die Objekte tragen den Titel "CPU-Temperatur <Extension>", und ich haette
+# daraus fast "CPU-Temperatur" als Typnamen abgeleitet. Die Kopfzeile sagt
+# "Eigenschaften (Systemtemperatur [degC])". Das ist der vierte Fall, in dem
+# ein Objekttitel wie ein Typname aussah - nach HeatIRoomController2
+# ("Zentral"), Memory ("M1"), Notification ("Systembenachrichtigung") und
+# Dimmer ("Smartaktor").
+#
+# DIE GENERISCHEN GERAETEOBJEKTE HABEN GAR KEINEN TYPNAMEN
+# Bei GenActor, GenSensor, GenAactor und GenAsensor zeigt die Kopfzeile nur
+# den Datentyp in Klammern:
+#    "Eigenschaften ( [Digital])"   -> GenActor, GenSensor
+#    "Eigenschaften ( [kW])"        -> GenAactor, GenAsensor
+# Das ist kein Auslesefehler, sondern die Bauart: es sind Sensoren und Aktoren
+# eines beliebigen Netzwerkgeraets, und Config kennt fuer sie keinen eigenen
+# Namen. Sie bleiben daher ohne deutschen Namen - zu Recht.
+
+# --- Nachtrag Modbus/Kalender/Betriebsmodi, 30.08.2026 -----------------------
+ModbusASensor            = Modbus Analogsensor            # [Foto] Bezeichnung 168 - L1 to L2 voltage THD
+ModbusASensor            = Modbus Analogsensor            # [Foto] Bezeichnung 027 - Total system power
+ModbusASensor            = Modbus Analogsensor            # [Foto] Bezeichnung 414 - DHCP enabled
+CalendarEntry            = Betriebszeit                   # [Foto] Bezeichnung BY - Heilige Drei Könige
+CalendarEntry            = Betriebszeit                   # [Foto] Bezeichnung Ferien BY Buß- und Bettag 2026
+StartPulse               = Startimpuls                    # [Foto] Bezeichnung Startimpuls
+Mode                     = Betriebsmodus                  # [Foto] Bezeichnung Feiertag
+MTablet                  = Verwaltetes Tablet             # [Foto] Bezeichnung Apple Tablet
+
+# ZWEI ERGAENZUNGEN ZUM MODBUS- UND WETTER-NACHTRAG (30.08.2026)
+#
+# `ModbusAActor` ist inzwischen GEMESSEN (siehe Zuordnung unten). Zuvor stand
+# hier, der Name sei nur erschlossen - der Schluss stimmte, aber erst das
+# Bildschirmfoto der Kopfzeile "Eigenschaften (Modbus Analogaktor)" hat ihn
+# belegt. Der Unterschied ist genau der, um den es in dieser Datei geht.
+#
+# `WeatherData` (33x) hat KEINEN Typnamen in der Kopfzeile: dort steht der
+# Objektname ("Sonnenschein"), und der Typ wird ueber das Feld "Datentyp"
+# gewaehlt. Gemessen am 30.08.2026 - das ist kein Auslesefehler, sondern die
+# Bauart. Dasselbe gilt fuer GenActor/GenSensor/GenAactor/GenAsensor, wo die
+# Kopfzeile nur den Datentyp in Klammern zeigt.
+
+ModbusAActor             = Modbus Analogaktor               # [Foto] Kopfzeile, Bezeichnung "Fronius StorCtl_Mod"
+
+# --- Nachtrag Struktur, letzter Stapel 30.08.2026 ----------------------------
+Place                    = Raum                             # [Foto] Kopfzeile "Eigenschaften (Raum)", Bezeichnung "KG Technikraum"
+
+# `Category` = "Kategorie" ist jetzt auch per KOPFZEILE belegt (Bezeichnung
+# "Steckdosen") - zuvor nur ueber die Attributform (Icon/PType/RGR gegen
+# GT/MG). Zwei unabhaengige Wege, gleiches Ergebnis.
+#
+# `Icon` (24x im Haus) hat KEINEN Typnamen: die Kopfzeile lautet
+# "Eigenschaften ()" - leer, wie bei GenActor/GenSensor/GenAactor/GenAsensor
+# und WeatherData. Der Baum nennt die Gruppe "Symbole", das Objekt selbst hat
+# nur Bezeichnung und Symbol.
+
+# --- Nachtrag Mitteilungen/Audio/Fernbedienung, 30.08.2026 -------------------
+Tracker                  = Tracker                    # [Foto] Bezeichnung Zutritt Tracker
+RC                       = Fernbedienung              # [Foto] Bezeichnung LG TV
+RCkey                    = Taste                      # [Foto] Bezeichnung Volume Up

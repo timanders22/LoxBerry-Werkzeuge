@@ -530,6 +530,24 @@ lb_da = (bool(lbhome) and os.path.isdir(os.path.join(lbhome, 'config', 'system')
          and os.name != 'nt')
 _st_ordner = PLUGIN_KENNUNG[2] or PLUGIN_KENNUNG[1]
 _st_urteile = []
+_st_reste = []
+
+
+def _wegraeumen(pfad):
+    """Kopie loeschen - und SAGEN, wenn es nicht geht. Rueckgabe: '' oder der Pfad.
+
+    Bis 08.11.2026 stand hier rmtree(ignore_errors=True). Im Bestandslauf blieb
+    so EINE Kopie still liegen (unter Windows haelt ein noch laufender Prozess
+    sein Arbeitsverzeichnis fest); erst eine Zaehlung im Systemtemp fand sie.
+    Drei Versuche mit kurzer Pause, dann der Pfad in die Meldung.
+    """
+    import time
+    for _ in range(3):
+        shutil.rmtree(pfad, ignore_errors=True)
+        if not os.path.exists(pfad):
+            return ''
+        time.sleep(1)
+    return pfad
 for dienst in dienste:
     # ABSOLUT, bevor das Arbeitsverzeichnis wechselt: ORDNER kommt meist
     # relativ ("LoxBerry-Plugin-X-1.0.0"), und mit cwd in der Kopie fand
@@ -571,8 +589,9 @@ for dienst in dienste:
     except subprocess.TimeoutExpired:
         _st_aus, _st_rc = None, None
     finally:
-        if _st_tmp:
-            shutil.rmtree(_st_tmp, ignore_errors=True)
+        _st_rest = _wegraeumen(_st_tmp) if _st_tmp else ''
+    if _st_rest:
+        _st_reste.append(_st_rest)
     if _st_aus is None:
         _st_urteile.append((False, '%s: Zeitueberschreitung (300 s)' % _st_name))
         continue
@@ -611,7 +630,9 @@ if _st_urteile:
                   else (None if None in _st_werte else True))
     melde('Selbsttest', _st_gesamt,
           '%d Selbsttest(s): %s' % (len(_st_urteile),
-                                    '; '.join(t for _, t in _st_urteile)))
+                                    '; '.join(t for _, t in _st_urteile))
+          + ('; KOPIE NICHT ENTFERNT (laeuft dort noch ein Prozess?): %s'
+             % ', '.join(_st_reste) if _st_reste else ''))
 else:
     # STRICH, kein Haken. "Konnte nicht pruefen" ist nicht "geprueft und in
     # Ordnung"; wer das einsammelt, hat eine Pruefung weniger, als er glaubt.
@@ -748,9 +769,27 @@ else:
 # Gemessen wird am GERENDERTEN HTML, nicht am Quelltext: <?php ?>-Zweige
 # machen aus einer Datei mehrere moegliche Seiten, und die Schachtelung
 # entsteht erst in der ausgelieferten.
+#
+# AN EINER KOPIE seit 08.11.2026 (CLAUDE.md Abschnitt 5: ein Pruefauftrag
+# bekommt eine Kopie). Das Rendern fuehrt den Code des Plugins aus, und der
+# schrieb in den Pruefling: AnkerSolix 0.9.40 legte config/ankersolix.json
+# und .backup.json an (es nimmt den Ordnernamen mit Punkten aus LBPPLUGINDIR
+# nicht an und arbeitet dann "nicht installiert" neben sich), Zigbee2MqttNG
+# 4.2.12 seinen Twig-Zwischenspeicher unter templates/cache/ (er liegt unter
+# LBPTEMPLATEDIR, und das ist hier der Pruefling). Beides stand danach im
+# Ordner und waere mit dem naechsten Packen ins Archiv gegangen. Die Kopie
+# traegt denselben Ordnernamen, damit die Attrappe dieselben Pfade sieht.
 fp = os.path.join(HIER, 'formularpruefung.py')
 if os.path.isfile(fp):
-    r = subprocess.run([PY, fp, ORDNER], capture_output=True, text=True)
+    import shutil
+    import tempfile
+    _fp_tmp = tempfile.mkdtemp(prefix='freigabe_formulare_')
+    _fp_kopie = os.path.join(_fp_tmp, os.path.basename(os.path.abspath(ORDNER)))
+    try:
+        shutil.copytree(ORDNER, _fp_kopie, symlinks=True)
+        r = subprocess.run([PY, fp, _fp_kopie], capture_output=True, text=True)
+    finally:
+        _fp_rest = _wegraeumen(_fp_tmp)
     zeilen = [z.strip() for z in r.stdout.splitlines() if z.strip()]
     schluss = [z for z in zeilen if 'Linien geprueft' in z]
     befund = [z for z in zeilen if z.startswith(os.path.basename(ORDNER))
@@ -765,6 +804,9 @@ if os.path.isfile(fp):
               befund[0].split(None, 1)[1][:70] if befund else schluss[0][:70])
     else:
         melde('Formulare', True, 'keine verschachtelten <form>')
+    if _fp_rest:
+        melde('Formulare-Kopie', None,
+              'Kopie nicht entfernt (laeuft dort noch ein Prozess?): %s' % _fp_rest)
 else:
     melde('Formulare', True, 'formularpruefung.py fehlt - entfaellt')
 

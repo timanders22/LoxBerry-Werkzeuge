@@ -141,7 +141,7 @@ def stand_leeren(name):
     """
     geleert = 0
     for zweig in ('config', 'data', 'log'):
-        d = HIER / 'lb' / zweig / 'plugins' / name.lower()
+        d = HIER / 'lb' / zweig / 'plugins' / rendern.attrappen_name(name)
         if not d.is_dir():
             continue
         for f in sorted(d.rglob('*')):

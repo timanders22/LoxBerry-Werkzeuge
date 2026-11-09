@@ -108,6 +108,43 @@ class Netzsperre:
         self.server.server_close()
 
 
+def attrappen_name(plugin):
+    """Der Ordnername unter lb/{config,data,log,templates}/plugins/ - und LBPPLUGINDIR.
+
+    SEIT 08.11.2026 nur noch a-z, 0-9, _ und -: alles andere wird _. Bis dahin
+    stand hier plugin.lower(), und ein Direktaufruf auf den Arbeitsordner gab
+    "loxberry-plugin-ankersolix-0.9.40" weiter. AnkerSolix nimmt nur
+    [A-Za-z0-9_-]{1,64} an, arbeitete dann "nicht installiert" NEBEN sich und
+    legte config/ankersolix.json im Pruefling an; der Wirkungstest verglich
+    dabei eine leere Konfiguration in der Attrappe. Die Kette vergibt eigene
+    Namen (KOPIENNAME, etwa "ankersolix") - fuer sie aendert sich nichts.
+    """
+    n = os.path.basename(str(plugin).replace('\\', '/').rstrip('/')).lower()
+    return re.sub(r'[^a-z0-9_-]', '_', n)
+
+
+def vorlagen_spiegel(datei, name):
+    """templates/ des Pruefling nach lb/templates/plugins/<name> spiegeln - wie auf
+    dem Geraet, wo LBPTEMPLATEDIR ein eigener Baum ist. Rueckgabe: der Spiegel.
+
+    SEIT 08.11.2026. Vorher zeigte LBPTEMPLATEDIR in den Pruefling, und was ein
+    Plugin dort ablegt, landete im Pruefling: Zigbee2MqttNG 4.2.12 seinen
+    Twig-Zwischenspeicher (templates/cache/, zwei Dateien je Lauf). Der Spiegel
+    wird bei jedem Lauf neu angelegt, damit er nie einen alten Stand zeigt.
+    """
+    import shutil
+    quelle = (datei.parent.parent.parent / 'templates').resolve()
+    ziel = LB / 'templates' / 'plugins' / name
+    shutil.rmtree(ziel, ignore_errors=True)
+    if ziel.exists():
+        raise RuntimeError('Vorlagenspiegel nicht entfernbar: %s' % ziel)
+    if quelle.is_dir():
+        shutil.copytree(quelle, ziel)
+    else:
+        ziel.mkdir(parents=True, exist_ok=True)
+    return ziel
+
+
 def lauf(php, datei, plugin, sperre=None, unterdrueckt=None):
     """unterdrueckt: SEIT 25.09.2026. Eine Liste, in die lauf() die Meldungen
     legt, deren Stelle sie mit @ unterdrueckt hat - sie stehen dann NICHT
@@ -127,13 +164,14 @@ def lauf(php, datei, plugin, sperre=None, unterdrueckt=None):
     if sperre is not None:
         sperre.umgebung(umg)
     umg['LBHOMEDIR'] = str(LB)
-    umg['LBPPLUGINDIR'] = plugin.lower()
-    umg['LBPCONFIGDIR'] = str(LB / 'config/plugins' / plugin.lower())
-    umg['LBPLOGDIR'] = str(LB / 'log/plugins' / plugin.lower())
-    umg['LBPDATADIR'] = str(LB / 'data/plugins' / plugin.lower())
+    name = attrappen_name(plugin)
+    umg['LBPPLUGINDIR'] = name
+    umg['LBPCONFIGDIR'] = str(LB / 'config/plugins' / name)
+    umg['LBPLOGDIR'] = str(LB / 'log/plugins' / name)
+    umg['LBPDATADIR'] = str(LB / 'data/plugins' / name)
     umg['LBPHTMLAUTHDIR'] = str(datei.parent.resolve())
     umg['LBPHTMLDIR'] = str((datei.parent.parent / 'html').resolve())
-    umg['LBPTEMPLATEDIR'] = str((datei.parent.parent.parent / 'templates').resolve())
+    umg['LBPTEMPLATEDIR'] = str(vorlagen_spiegel(datei, name))
     umg['LBPBINDIR'] = str((datei.parent.parent.parent / 'bin').resolve())
     for k in ('LBPCONFIGDIR', 'LBPLOGDIR', 'LBPDATADIR'):
         Path(umg[k]).mkdir(parents=True, exist_ok=True)

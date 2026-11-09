@@ -20,6 +20,7 @@ Schreibt in einen eigenen Kratzordner und in den Pruefstand unter `lb/`;
 beides wird am Ende aufgeraeumt.
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -129,7 +130,9 @@ def ruf(wurzel, *zusatz):
 
 def aufraeumen():
     for zweig in ('config', 'data', 'log'):
-        shutil.rmtree(HIER / 'lb' / zweig / 'plugins' / NAME.lower(), ignore_errors=True)
+        # Derselbe Name, den rendern.lauf() bildet (seit 08.11.2026 ohne Punkte).
+        shutil.rmtree(HIER / 'lb' / zweig / 'plugins' / re.sub(r'[^a-z0-9_-]', '_', NAME.lower()),
+                      ignore_errors=True)
     shutil.rmtree(HIER / 'lb' / 'reiterlauf' / ('%s_de' % NAME), ignore_errors=True)
 
 

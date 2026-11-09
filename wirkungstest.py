@@ -18,6 +18,9 @@ import difflib, json, os, re, subprocess, sys
 from html.parser import HTMLParser
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import rendern as _R  # attrappen_name(), vorlagen_spiegel() - eine Regel fuer beide
+
 HIER = Path(__file__).resolve().parent
 LB = HIER / 'lb'
 VORLAUF = HIER / 'vorlauf_post.php'
@@ -180,7 +183,8 @@ def umgebung(datei, plugin):
     u['LBPDATADIR'] = str(LB / 'data/plugins' / name)
     u['LBPHTMLAUTHDIR'] = str(datei.parent.resolve())
     u['LBPHTMLDIR'] = str((datei.parent.parent / 'html').resolve())
-    u['LBPTEMPLATEDIR'] = str((datei.parent.parent.parent / 'templates').resolve())
+    # Spiegel statt Pruefling seit 08.11.2026 (rendern.vorlagen_spiegel()).
+    u['LBPTEMPLATEDIR'] = str(_R.vorlagen_spiegel(datei, name))
     u['LBPBINDIR'] = str((datei.parent.parent.parent / 'bin').resolve())
     for k in ('LBPCONFIGDIR', 'LBPLOGDIR', 'LBPDATADIR'):
         Path(u[k]).mkdir(parents=True, exist_ok=True)
@@ -253,8 +257,12 @@ FLUECHTIG = re.compile(r'backup|sicherung|\.tmp(\.|$)|\.lock$|\.pid$'
 
 
 def pruefling_ordner(plugin):
-    """Der Ordnername, unter dem die Attrappe den Pruefling erwartet."""
-    return os.path.basename(str(plugin).replace('\\', '/').rstrip('/')).lower()
+    """Der Ordnername, unter dem die Attrappe den Pruefling erwartet.
+
+    Seit 08.11.2026 dieselbe Regel wie rendern.attrappen_name(): nur a-z, 0-9,
+    _ und - (vorher Punkte erlaubt - AnkerSolix schrieb dann neben sich).
+    """
+    return _R.attrappen_name(plugin)
 
 
 def plugin_ordner(pfad):

@@ -178,7 +178,7 @@ for name in ("language_de.ini", "language_en.ini"):
         (LANG / name).write_bytes(quelle.read_bytes())
 # Der Vorlauf kommt als Kopie MIT KURZEM NAMEN in den Arbeitsordner: php-cgi
 # verschluckt unter Windows alle -d-Angaben ab der ersten, deren Wert ein
-# Leerzeichen enthaelt - und "Loxone fuer Claude" enthaelt zwei. Gemessen am
+# Leerzeichen enthaelt - und der Name des Arbeitsordners enthaelt zwei. Gemessen am
 # 31.08.2026: mit dem langen Pfad wirkte weder auto_prepend_file noch das
 # danach stehende display_errors, und der Lauf sah trotzdem gruen aus.
 (ZIEL / "_vorlauf.php").write_bytes(VORLAUF.read_bytes())

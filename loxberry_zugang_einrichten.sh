@@ -62,7 +62,7 @@ chown claude:claude /home/claude/.ssh/authorized_keys; chmod 600 /home/claude/.s
 echo "== 3. sudo, eng"
 cat > /etc/sudoers.d/claude <<'EOF'
 # Claude Code auf dem LoxBerry: nur lesen, Dienste ansehen, einen Plugin-Dienst von Hand starten.
-# Angelegt von Werkzeuge/loxberry_zugang_einrichten.sh (Arbeitsordner "Loxone fuer Claude").
+# Angelegt von Werkzeuge/loxberry_zugang_einrichten.sh.
 Defaults:claude !requiretty
 claude ALL=(root) NOPASSWD: /usr/bin/systemctl status *, /bin/systemctl status *
 claude ALL=(root) NOPASSWD: /usr/bin/journalctl *, /bin/journalctl *

@@ -104,6 +104,29 @@ SSH; sie erwarten einen eingerichteten SSH-Zugang (Vorgabe: Host
 `loxberry-claude`), den `loxberry_zugang_einrichten.sh` auf dem LoxBerry
 anlegt.
 
+## Seit November dazugekommen
+
+**Miniserver-Zugang.** `miniserver_zugang_pruefen.py` sucht in Plugins jede
+Stelle, an der die kodierten Zugangsdaten des Miniservers (`Pass`, `Admin`,
+`Credentials`) für eine Anmeldung genommen werden statt der Klartextfelder
+(`*_raw`). Mit dem kodierten Feld antwortet der Miniserver bei jedem Kennwort
+mit Sonderzeichen mit HTTP 401. Ein Fund ist eine Frage an den Code, kein
+Urteil.
+
+**Musterprojekt.** `musterprojekt_bilder_pruefen.py` prüft, ob jedes Bild
+aus dem Reiter „Einbindung in Loxone“ eines Plugins byteweise im Repository
+`LoxBerry-Plugins-Musterprojekt` liegt (im lokalen Klon, vorher `git pull`).
+
+**Projektdatei.** `raumregler_wert_setzen.py` setzt einen Parameter (`Def`)
+an einem oder mehreren Raumreglern einer `.Loxone`-Datei, byteweise, und
+prüft danach, dass sich die Datei genau um diesen Unterschied geändert hat.
+
+**Drei Eichungen.** `installationslage_eichung.py`,
+`oberflaeche_sprachfaehig_eichung.py` und `wirkungstest_eichung.py` gehören
+zu den am 12.11.2026 berichtigten Fassungen von `installationslage_pruefen.py`,
+`oberflaeche_sprachfaehig.py` und `wirkungstest.py`. Gegen die älteren
+Fassungen schlagen sie an; das ist gewollt.
+
 ## Was hier **nicht** liegt
 
 `lb/` und `lb_mqtt/` sind Prüfstände mit der Konfiguration einer **laufenden**

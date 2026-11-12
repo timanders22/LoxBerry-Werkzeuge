@@ -224,8 +224,23 @@ def main():
 
     tmp = quelle.with_suffix(quelle.suffix + '.pruef.%d' % os.getpid())
     ablegen(tmp, neu, crlf)
-    r = subprocess.run([php, '-l', str(tmp)], capture_output=True, text=True,
-                       encoding='utf-8', errors='replace', timeout=60)
+    # BERICHTIGT 12.11.2026 (Nachtpruefung, Punkt A13): lief php -l nicht zu
+    # Ende (Zeitgrenze 60 s) oder liess es sich nicht starten, brach das
+    # Werkzeug mit einem Traceback ab und liess die Nebendatei
+    # index.php.pruef.<pid> NEBEN der Oberflaeche liegen - im Plugin-Ordner,
+    # von wo sie ins Archiv geht. Gemessen in der Eichung (Fall F8), vorher rot.
+    # Jetzt: Nebendatei weg, nichts geschrieben, Rueckgabe 2 (nicht gemessen).
+    try:
+        r = subprocess.run([php, '-l', str(tmp)], capture_output=True, text=True,
+                           encoding='utf-8', errors='replace', timeout=60)
+    except (OSError, subprocess.SubprocessError) as e:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        print('ABGEWIESEN: php -l lief nicht zu Ende (%s) - das Ergebnis ist '
+              'NICHT gemessen, es wurde nichts geschrieben.' % type(e).__name__)
+        return 2
     if r.returncode != 0:
         meldung = ((r.stdout or '') + (r.stderr or '')).strip().splitlines()
         tmp.unlink()

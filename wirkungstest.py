@@ -205,6 +205,13 @@ def lauf(datei, plugin, post=None):
     "1 Linien geprueft, 0 mit Befund", Rueckgabewert 0.
     """
     u = umgebung(datei, plugin)
+    # Seit 10.11.2026 raeumt lauf() die Nebendatei selbst weg, gleich nach dem
+    # PHP-Aufruf und auch bei einer Ausnahme. Vorher tat es nur main() am
+    # normalen Ende: mqtt_probe.py ruft lauf() mit POST-Daten und raeumte nie,
+    # ein abgebrochener Lauf (Zeitgrenze, Ausnahme) ebenso nicht. Gemessen:
+    # 25 Reste post.<pid>.json im Werkzeugordner, alle in den Versionsstand
+    # geraten. Eichung leck_eichen.py: vorher 3 von 3 Faellen rot, nachher 0.
+    pd = None
     if post is None:
         u.pop('PRUEF_POST', None)
     else:
@@ -216,7 +223,23 @@ def lauf(datei, plugin, post=None):
         pd = HIER / ('post.%d.json' % os.getpid())
         pd.write_text(json.dumps(post), encoding='utf-8')
         u['PRUEF_POST'] = str(pd)
-    r = subprocess.run(
+    try:
+        r = _php_aufruf(datei, u)
+    finally:
+        if pd is not None:
+            try:
+                pd.unlink()
+            except OSError:
+                pass
+    bef = []
+    if '###BEFUNDE###' in r.stderr:
+        bef = [z for z in r.stderr.split('###BEFUNDE###', 1)[1].strip().splitlines() if z.strip()]
+    return r.stdout, bef, r.returncode
+
+
+def _php_aufruf(datei, u):
+    """Der eine PHP-Aufruf von lauf(); eigene Funktion, damit lauf() ihn in try/finally fassen kann."""
+    return subprocess.run(
         # os.pathsep statt eines harten ';' - unter Linux trennt der
         # Doppelpunkt, und ein ';' machte aus beiden Pfaden EINEN. Die
         # phplib waere dort nie gefunden worden, und JEDE Linie haette
@@ -231,10 +254,6 @@ def lauf(datei, plugin, post=None):
          str(datei.resolve())],
         capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=str(datei.parent.resolve()),
         env=u, timeout=90)
-    bef = []
-    if '###BEFUNDE###' in r.stderr:
-        bef = [z for z in r.stderr.split('###BEFUNDE###', 1)[1].strip().splitlines() if z.strip()]
-    return r.stdout, bef, r.returncode
 
 
 # Dateien, die sich bei jedem Schreiben aendern DUERFEN: Zweitschriften,
@@ -254,6 +273,17 @@ def lauf(datei, plugin, post=None):
 FLUECHTIG = re.compile(r'backup|sicherung|\.tmp(\.|$)|\.lock$|\.pid$'
                        r'|\.log(\.\d+)?$|\.wdh$|~$'
                        r'|^(einmal)?meldung\.json$', re.I)
+
+# Seit 10.11.2026: Pruefpuffer des Reiters Test, die ein Speichern ABSICHTLICH
+# verwirft, damit die Selbstpruefung nicht bis zu 300 s einen alten Stand
+# zeigt (Smartmeter-classic sm_cache_verwerfen(); Robonect und Pumpenwacht
+# nennen endpunkt.json ebenso einen Zwischenspeicher). Ausgenommen ist NUR das
+# Verschwinden - eine neu angelegte oder geaenderte Datei dieses Namens wird
+# weiter gemeldet. Anlass: Smartmeter-classic 2.8.20/2.8.21, Knopf
+# vz_speichern, bei jedem Lauf "VERSCHWUNDEN: diagnose.json, endpunkt.json".
+# Geeicht an einer Kopie von 2.8.21 (gruen) und an derselben Kopie, deren
+# sm_cache_verwerfen() zusaetzlich die Konfiguration loescht (rot).
+PRUEFPUFFER = re.compile(r'^(diagnose|endpunkt)\.json$', re.I)
 
 
 def pruefling_ordner(plugin):
@@ -366,6 +396,8 @@ def vergleiche(vorher, nachher, eigen=None):
             melde('NEU angelegt: ' + Path(pfad).name)
             continue
         if b is None:
+            if PRUEFPUFFER.search(Path(pfad).name):
+                continue        # absichtlich verworfener Pruefpuffer, siehe PRUEFPUFFER
             melde('VERSCHWUNDEN: ' + Path(pfad).name)
             continue
         try:
@@ -525,12 +557,24 @@ def teste(plugin, verzeichnis='stand'):
                        'Formular (alle uebersprungen oder keines vorhanden)')
     for nr, (post, knopf) in enumerate(liste, 1):
         vorher = konfig_abbild(plugin)
-        lauf(datei, plugin, post)
+        _aus, bef, rc = lauf(datei, plugin, post)
         nachher = konfig_abbild(plugin)
         # Der gedrueckte Knopf gehoert in den Befund: bei mehreren Knoepfen
         # an einem Formular sagt die Feldliste allein nicht, welcher Zweig
         # gelaufen ist.
         wer = ('Knopf %s' % knopf) if knopf else ', '.join(sorted(post)[:4])
+        # BERICHTIGT 12.11.2026 (Nachtpruefung, Punkt A13): der Rueckgabewert
+        # des ABSENDENS wurde verworfen. Brach der Speicherzweig ab (fataler
+        # Fehler, Rueckgabewert 255), blieb die Konfiguration unberuehrt, der
+        # Vergleich fand nichts, und die Zeile lautete "ok" - aus dem Ausbleiben
+        # einer Wirkung auf Erfolg geschlossen, ohne dass die Handlung
+        # stattgefunden hatte. Gemessen an wirkungstest_eichung.py, Fall W4
+        # (vorher gruen, also blind). Der Rueckgabewert der Ansicht davor wurde
+        # schon seit 31.08.2026 gehalten.
+        if rc != 0:
+            fatal = [z.split('|', 2)[1] for z in bef if z.startswith('FATAL|')]
+            befunde.append('Formular %d (%s): Absenden endet mit Rueckgabewert %d%s'
+                           % (nr, wer, rc, (' - ' + fatal[0][:160]) if fatal else ''))
         for u in vergleiche(vorher, nachher, pruefling_ordner(plugin)):
             befunde.append('Formular %d (%s): %s' % (nr, wer, u))
     return (befunde, len(liste), '')
@@ -550,17 +594,27 @@ def main():
     Rueckgabewert 0; ein aufrufendes Skript hielt das fuer Erfolg.
     """
     verz = 'stand'
+    verz_genannt = False
     namen = []
     for a in sys.argv[1:]:
         if a.startswith('--verz='):
             verz = a.split('=', 1)[1]
+            verz_genannt = True
         elif not a.startswith('--'):
             namen.append(a)
 
     # Ein Argument, das selbst ein Plugin-Ordner ist, wird unmittelbar
     # genommen - dann braucht es gar kein Grundverzeichnis.
+    #
+    # ABER NUR OHNE --verz (berichtigt 12.11.2026, Nachtpruefung A13): wer
+    # das Grundverzeichnis ausdruecklich nennt, meint die Linie DARIN. Bis
+    # dahin gewann ein gleichnamiger Ordner im aktuellen Verzeichnis, und
+    # --verz wurde still uebergangen - gemessen in wirkungstest_eichung.py,
+    # Fall W3b: --verz auf einen Ordner, den es nicht gibt, ergab "ok" statt
+    # Rueckgabe 2, weil der Name zufaellig auch neben dem Aufruf lag.
     einzeln = [n for n in namen
-               if (Path(n) / 'webfrontend/htmlauth/index.php').is_file()]
+               if not verz_genannt
+               and (Path(n) / 'webfrontend/htmlauth/index.php').is_file()]
     if einzeln and len(einzeln) == len(namen):
         auftrag = [(str(Path(n).resolve()), Path(n).name) for n in namen]
     else:

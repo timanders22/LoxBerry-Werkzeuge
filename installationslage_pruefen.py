@@ -462,11 +462,18 @@ def _einmal(php, datei, u, grenze, vorlauf=None):
 
 
 def lauf(php, datei, u, grenze=25, vorlauf=None):
-    """Ausgabe eines Aufrufs - und zwar auch die, die das Skript verschweigt.
+    """Ausgabe UND Rueckgabewert eines Aufrufs - auch das, was das Skript verschweigt.
 
-    Bricht der Lauf ab (Rueckgabewert ungleich 0), hat aber nichts Lesbares
-    hinterlassen, wird er mit dem Vorlauf wiederholt. Alles andere bleibt beim
-    Alten: wer ohnehin redet, wird kein zweites Mal aufgerufen.
+    Bricht der Lauf ab (Rueckgabewert ungleich 0) und nennt keinen Pfad- oder
+    fatalen Fehler, wird er mit dem Vorlauf wiederholt. Rueckgabe:
+    (Ausgabe, Rueckgabewert des ERSTEN Laufs) - der zweite ist nur Diagnose.
+
+    BERICHTIGT 12.11.2026 (Nachtpruefung, Punkt A13): bis dahin gab lauf()
+    nur die Ausgabe zurueck. Endete ein Skript mit einem Rueckgabewert
+    ungleich 0, sagte dabei etwas und hinterliess KEINEN fatalen Fehler
+    (`echo "keine Konfiguration"; exit(3);`), war der Rueckgabewert verloren:
+    keine Zeile, "in Ordnung". Gemessen an der Eichung
+    installationslage_eichung.py, Fall L3 (vorher rot).
     """
     aus, rc = _einmal(php, datei, u, grenze)
     if rc != 0 and vorlauf and not (PFADFEHLER.search(aus) or FATAL.search(aus)):
@@ -477,7 +484,7 @@ def lauf(php, datei, u, grenze=25, vorlauf=None):
             # Auch das ist eine Auskunft: abgebrochen, und niemand sagt warum.
             aus = (aus + '\nFatal error: Abbruch ohne Meldung, Rueckgabewert %d '
                          '(display_errors abgeschaltet?)' % rc).strip()
-    return aus
+    return aus, rc
 
 
 def pruefe(pfad, php):
@@ -508,7 +515,7 @@ def pruefe(pfad, php):
             if not d.is_dir():
                 continue
             for f in sorted(d.rglob('*.php')):
-                aus = lauf(php, f, u, vorlauf=vorlauf)
+                aus, rc = lauf(php, f, u, vorlauf=vorlauf)
                 kurz = zweig.split('/plugins/')[0] + '/' + f.name
                 if aus.startswith('<<'):
                     # Zeitueberschreitung oder gar nicht gestartet. Das ist
@@ -530,6 +537,12 @@ def pruefe(pfad, php):
                     zeile = next((z.strip() for z in aus.splitlines()
                                   if FATAL.search(z)), aus.strip()[:160])
                     sonst.append('%s: %s' % (kurz, zeile[:160]))
+                elif rc != 0:
+                    # Kein Befund dieser Klasse, aber eine Auskunft, die
+                    # bis 12.11.2026 verloren ging (siehe lauf()).
+                    sonst.append('%s: endet mit Rueckgabewert %d, ohne fatalen '
+                                 'Fehler - ansehen (Aufruf ohne Parameter? '
+                                 'Konfiguration fehlt?)' % (kurz, rc))
 
         # ------------------------------------------------------------------
         # Zweite, TEXTLICHE Sicht: das Muster selbst, auch wenn der Lauf
@@ -671,10 +684,17 @@ def main():
             print('%-46s NICHTS GEMESSEN (0 Dateien%s)' % (Path(n).name, rest))
         else:
             print('%-46s %d Dateien%s, in Ordnung' % (Path(n).name, anz, rest))
+        # Gekuerzt wird weiter - aber LAUT. Bis 12.11.2026 fielen die Zeilen
+        # ab der neunten bzw. fuenften stumm weg; dass es mehr gab, stand
+        # nirgends (Eichung, Fall Q).
         for s in sonst[:8]:
             print('   . ' + s)
+        if len(sonst) > 8:
+            print('   . ... und %d weitere Zeile(n) dieser Art' % (len(sonst) - 8))
         for s in unmessbar[:4]:
             print('   - nicht messbar: ' + s)
+        if len(unmessbar) > 4:
+            print('   - ... und %d weitere nicht messbare Datei(en)' % (len(unmessbar) - 4))
         if ausnahmen and zeige_ausnahmen:
             for s in ausnahmen:
                 print('   ~ Ausnahme: ' + s)
